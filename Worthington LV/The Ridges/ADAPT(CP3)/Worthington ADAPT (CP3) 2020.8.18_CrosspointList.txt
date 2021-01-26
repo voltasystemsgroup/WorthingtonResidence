@@ -1,0 +1,31 @@
+Crosspoint listing for C:\Users\Mike\Desktop\Worthington ADAPT (CP3) 2019.11.25_archive\Worthington ADAPT (CP3) 2020.8.18.SMW
+
+Note:  Crosspoint symbols with EquipID or ControlID set to 0d are not routeable.
+
+Equipment Crosspoint Routing.                                                                       EquipID
+===========================================================================================================
+S-7.19.10 in macro S-1.8.1:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modul          0
+es\chvthstat_sked_v4_0.cmc)                                                                         
+S-7.19.10 in macro S-1.8.2:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modul          0
+es\chvthstat_sked_v4_0.cmc)                                                                         
+S-7.19.10 in macro S-1.8.3:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modul          0
+es\chvthstat_sked_v4_0.cmc)                                                                         
+S-7.19.10 in macro S-1.8.4:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modul          0
+es\chvthstat_sked_v4_0.cmc)                                                                         
+S-7.19.10 in macro S-1.8.5:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modul          0
+es\chvthstat_sked_v4_0.cmc)                                                                         
+S-7.19.10 in macro S-1.8.6:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modul          0
+es\chvthstat_sked_v4_0.cmc)                                                                         
+S-7.19.10 in macro S-1.8.7:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modul          0
+es\chvthstat_sked_v4_0.cmc)                                                                         
+S-7.19.10 in macro S-1.8.8:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modul          0
+es\chvthstat_sked_v4_0.cmc)                                                                         
+S-7.19.10 in macro S-1.8.9:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modul          0
+es\chvthstat_sked_v4_0.cmc)                                                                         
+S-7.19.10 in macro S-1.8.10:S-2.2 (Module File C:\Program Files (x86)\Crestron\Cresdb\Modu          0
+les\chvthstat_sked_v4_0.cmc)                                                                        
+
+Control Crosspoint Routing.                                                                         ControlID
+=============================================================================================================
+No symbols of this type found in the program
+

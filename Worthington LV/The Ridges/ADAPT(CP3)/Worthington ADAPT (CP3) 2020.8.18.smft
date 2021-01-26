@@ -1,0 +1,84 @@
+<Device Model="CP3">
+   <Network Type="Cresnet" Id="01">
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="50" Name="tstat001"/>
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="51" Name="tstat002"/>
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="52" Name="tstat003"/>
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="53" Name="tstat004"/>
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="54" Name="tstat005"/>
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="55" Name="tstat006"/>
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="56" Name="tstat007"/>
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="57" Name="tstat008"/>
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="58" Name="tstat009"/>
+      <Device Model="CHV-TSTATA,CHV-THSTATA," DeviceId="59" Name="tstat010"/>
+      <Device Model="C2N-RTHS" DeviceId="6A" Name="C2N-RTHS [Wine]"/>
+      <Device Model="DIN-AO8" DeviceId="88"/>
+   </Network>
+   <Network Type="Ethernet" Id="02">
+      <Device Model="CEN-CI3-3" DeviceId="0A"/>
+      <Device Model="C2N-AMP-6X100" DeviceId="11" Name="C2N-AMP-6x100 (Ethernet)"/>
+      <Device Model="C2N-AMP-6X100" DeviceId="12" Name="C2N-AMP-6x100 (Ethernet)"/>
+      <Device Model="C2N-AMP-6X100" DeviceId="13" Name="C2N-AMP-6x100 (Ethernet)"/>
+      <Device Model="CEN-GWEXER" DeviceId="21" Name="CEN-GWEXER [Basment]">
+         <Network Type="RF">
+            <Device Model="HR-150,HRI-150" DeviceId="03" Name="hh008 [Gym 1]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="04" Name="hh009 [Gym 2]"/>
+            <Device Model="YALE-CTLL,YALE–CTDB,YALE–PBLL,YALE-PBDB,CLK-YL-YRD216,CLK-YL-YRD226,CLK-YL-YRD246,NTB-TS,YRD256-TSDB" DeviceId="10" Name="Yale Lock (Generic)"/>
+         </Network>
+      </Device>
+      <Device Model="CEN-GWEXER" DeviceId="22" Name="CEN-GWEXER [Main Floor]">
+         <Network Type="RF">
+            <Device Model="HR-150,HRI-150" DeviceId="03" Name="hh001 [MBed His]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="04" Name="hh002 [MBath]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="05" Name="hh003 [Great Room]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="06" Name="hh004 [Bar]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="07" Name="hh006 [Kitchen]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="08" Name="hh013 [MBed Hers]"/>
+            <Device Model="YALE-CTLL,YALE–CTDB,YALE–PBLL,YALE-PBDB,CLK-YL-YRD216,CLK-YL-YRD226,CLK-YL-YRD246,NTB-TS,YRD256-TSDB" DeviceId="31" Name="Yale Lock [lock001]"/>
+            <Device Model="YALE-CTLL,YALE–CTDB,YALE–PBLL,YALE-PBDB,CLK-YL-YRD216,CLK-YL-YRD226,CLK-YL-YRD246,NTB-TS,YRD256-TSDB" DeviceId="32" Name="Yale Lock [lock002]"/>
+            <Device Model="YALE-CTLL,YALE–CTDB,YALE–PBLL,YALE-PBDB,CLK-YL-YRD216,CLK-YL-YRD226,CLK-YL-YRD246,NTB-TS,YRD256-TSDB" DeviceId="33" Name="Yale Lock [lock003]"/>
+            <Device Model="YALE-CTLL,YALE–CTDB,YALE–PBLL,YALE-PBDB,CLK-YL-YRD216,CLK-YL-YRD226,CLK-YL-YRD246,NTB-TS,YRD256-TSDB" DeviceId="34" Name="Yale Lock [lock004]"/>
+         </Network>
+      </Device>
+      <Device Model="CEN-GWEXER" DeviceId="23" Name="CEN-GWEXER [Upstairs]">
+         <Network Type="RF">
+            <Device Model="HR-150,HRI-150" DeviceId="03" Name="hh005 [Loft]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="04" Name="hh007 [Den]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="05" Name="hh010 [Bed 2]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="06" Name="hh011 [Bed 3]"/>
+            <Device Model="HR-150,HRI-150" DeviceId="07" Name="hh012 [Bed 4]"/>
+            <Device Model="CLW-SWEX-P" DeviceId="2A" Name="[Water Feature]"/>
+         </Network>
+      </Device>
+      <Device Model="TSW-1060" DeviceId="31" Name="tp001"/>
+      <Device Model="TSW-1060" DeviceId="32" Name="tp002"/>
+      <Device Model="TSW-1060" DeviceId="33" Name="tp003"/>
+      <Device Model="TSW-560" DeviceId="34" Name="tp004"/>
+      <Device Model="TSW-560" DeviceId="35" Name="tp005"/>
+      <Device Model="TSW-560" DeviceId="36" Name="tp006"/>
+      <Device Model="TSW-1060" DeviceId="37" Name="tp007"/>
+      <Device Model="TSW-1060" DeviceId="38" Name="tp008"/>
+      <Device Model="TSW-1060" DeviceId="39" Name="tp009"/>
+      <Device Model="Crestron_App" DeviceId="3A" Name="tp012 (iPad)"/>
+      <Device Model="Crestron_App" DeviceId="3B" Name="tp013 (iPad)"/>
+      <Device Model="TSW-1060" DeviceId="40" Name="tp010"/>
+      <Device Model="TSW-1060" DeviceId="41" Name="tp011"/>
+      <Device Model="TSR-310" DeviceId="44" Name="TSR-310 [tp014 Theater]"/>
+      <Device Model="TSR-310" DeviceId="45" Name="TSR-310 [tp015 Great Room]"/>
+      <Device Model="HD-MD8X1-4K" DeviceId="50" Name="HD-MD8x1-4K"/>
+      <Device Model="DM-NVX-350C,DM-NVX-351C" DeviceId="71" Name="DM-NVX-35xC [src001] DTV1"/>
+      <Device Model="DM-NVX-350C,DM-NVX-351C" DeviceId="72" Name="DM-NVX-35xC [src002] DTV2"/>
+      <Device Model="DM-NVX-350C,DM-NVX-351C" DeviceId="73" Name="DM-NVX-35xC [src003] DTV3"/>
+      <Device Model="DM-NVX-350C,DM-NVX-351C" DeviceId="74" Name="DM-NVX-35xC [src004] ATV1"/>
+      <Device Model="DM-NVX-350C,DM-NVX-351C" DeviceId="75" Name="DM-NVX-35xC [src005] ATV2"/>
+      <Device Model="DM-NVX-350C,DM-NVX-351C" DeviceId="76" Name="DM-NVX-35xC [rcvr001] Master Bose"/>
+      <Device Model="DM-NVX-350C,DM-NVX-351C" DeviceId="77" Name="DM-NVX-35xC [rcvr002] Great Room Marantz"/>
+      <Device Model="DM-NVX-350C,DM-NVX-351C" DeviceId="78" Name="DM-NVX-35xC [rcvr003] Theater Marantz"/>
+      <Device Model="CEN-NSP-1" DeviceId="80"/>
+      <Device Model="DM-NVX-350,DM-NVX-351" DeviceId="91" Name="DM-NVX-35x [tv001] Mbed"/>
+      <Device Model="DM-NVX-350,DM-NVX-351" DeviceId="92" Name="DM-NVX-35x [tv002] Mbath"/>
+      <Device Model="DM-NVX-350,DM-NVX-351" DeviceId="93" Name="DM-NVX-35x [tv003] Great Room"/>
+      <Device Model="DM-NVX-350,DM-NVX-351" DeviceId="94" Name="DM-NVX-35x [tv004] Bar"/>
+      <Device Model="DM-NVX-350,DM-NVX-351" DeviceId="95" Name="DM-NVX-35x [tv005] Theater"/>
+      <Device Model="DM-NVX-350,DM-NVX-351" DeviceId="96" Name="DM-NVX-35x [tv006] Loft"/>
+   </Network>
+</Device>
