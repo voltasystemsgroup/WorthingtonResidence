@@ -1,0 +1,996 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+  (Fill in comments below)
+*******************************************************************************************/
+/*
+Dealer Name: Crestron Electronics
+System Name: Baldwin Lock
+System Number:
+Programmer: LP
+Comments:
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+  (Uncomment and declare compiler directives as needed)
+*******************************************************************************************/
+// #ENABLE_DYNAMIC
+#SYMBOL_NAME "Baldwin Lock v1.0 Processor"
+// #HINT ""
+// #DEFINE_CONSTANT	ciEvent				0x01
+// #DEFINE_CONSTANT	ciCommand			0x02
+// #DEFINE_CONSTANT	ciLocked			0xFF
+// #DEFINE_CONSTANT	ciUnlocked			0x00
+// #DEFINE_CONSTANT	ciNull				0x00
+// #DEFINE_CONSTANT	ciLED				0x01
+// #DEFINE_CONSTANT	ciAutoRelock		0x02
+// #DEFINE_CONSTANT	ciSound				0x03
+#DEFINE_CONSTANT	ciMaxUserNumbers	30
+
+// #CATEGORY "" 
+// #PRINT_TO_TRACE
+// #DIGITAL_EXPAND 
+// #ANALOG_SERIAL_EXPAND 
+// #OUTPUT_SHIFT 
+// #HELP_PDF_FILE ""
+#DEFAULT_NONVOLATILE
+#ENABLE_STACK_CHECKING
+// #ENABLE_TRACE
+#PRINT_TO_TRACE
+#ENCODING_ASCII
+// #ENCODING_UTF16
+// #ENCODING_INHERIT_FROM_PARENT
+// #ENCODING_INHERIT_FROM_PROGRAM
+
+#HELP_BEGIN
+To be used with the Baldwin Lock v1.0.umc module only.
+Not to be used as a stand alone module.
+#HELP_END
+
+
+/*******************************************************************************************
+  Include Libraries
+  (Uncomment and include additional libraries as needed)
+*******************************************************************************************/
+// #CRESTRON_LIBRARY ""
+// #USER_LIBRARY ""
+
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+  (Uncomment and declare inputs and outputs as needed)
+*******************************************************************************************/
+DIGITAL_INPUT Selected_User_Delete;
+DIGITAL_INPUT Clear_User_Settings;
+DIGITAL_INPUT Clear_All_PIN_Codes;
+DIGITAL_INPUT Read_Lock_State_Attribute;
+DIGITAL_INPUT From_Module_Set_User_PIN;
+DIGITAL_INPUT From_Module_Delete_All_Users;
+DIGITAL_INPUT Get_Attribute_Status;
+DIGITAL_INPUT _SKIP_;
+DIGITAL_INPUT _SKIP_;
+DIGITAL_INPUT Lock[3];
+DIGITAL_INPUT Set_User_Status[4];
+DIGITAL_INPUT Set_User_Type[4];
+DIGITAL_INPUT Set_LED[2];
+DIGITAL_INPUT Set_Auto_Relock[2];
+DIGITAL_INPUT Set_Sound[2];
+BUFFER_INPUT Command_From_Lock[200]; 
+STRING_INPUT User_Number_Text_In[30];
+STRING_INPUT User_Name_Text_In[30];
+STRING_INPUT User_PIN_Text_In[30];
+STRING_INPUT From_Module_User_ID[2];
+STRING_INPUT From_Module_User_Name[100];
+STRING_INPUT From_Module_User_PIN[8];
+
+ANALOG_OUTPUT Locked_Slot_Num_Val;
+ANALOG_OUTPUT Unlocked_Slot_Num_Val;
+
+STRING_OUTPUT Lock_Event_Text;
+STRING_OUTPUT User_Event_Text;
+STRING_OUTPUT Alarm_Event_Text;
+STRING_OUTPUT User_Number_Text_Out;
+STRING_OUTPUT User_Name_Text_Out;
+STRING_OUTPUT User_PIN_Text_Out;
+STRING_OUTPUT User_Status_Text_Out;
+
+DIGITAL_OUTPUT Not_Fully_Locked_Pulse;
+DIGITAL_OUTPUT Locked_Pulse;
+DIGITAL_OUTPUT Unlocked_Pulse;
+DIGITAL_OUTPUT Lock_Success_Pulse;
+DIGITAL_OUTPUT Lock_Failure_Pulse;
+DIGITAL_OUTPUT Unlock_Success_Pulse;
+DIGITAL_OUTPUT Unlock_Failure_Pulse;
+DIGITAL_OUTPUT Toggle_Success_Pulse;
+DIGITAL_OUTPUT Toggle_Failure_Pulse;
+DIGITAL_OUTPUT Unknown_Event_Pulse;
+DIGITAL_OUTPUT Locked_Via_Keypad_Pulse;
+DIGITAL_OUTPUT Unlocked_Via_Keypad_Pulse;
+DIGITAL_OUTPUT Locked_Via_RF_Pulse;
+DIGITAL_OUTPUT Unlocked_Via_RF_Pulse;
+DIGITAL_OUTPUT Locked_Via_Thumbturn_Pulse;
+DIGITAL_OUTPUT Unlocked_Via_Thumbturn_Pulse;
+DIGITAL_OUTPUT One_Touch_Lock_Pulse;
+DIGITAL_OUTPUT Locked_Via_Key_Pulse;
+DIGITAL_OUTPUT Unlocked_Via_Key_Pulse;
+DIGITAL_OUTPUT Auto_Lock_Pulse;
+DIGITAL_OUTPUT Schedule_Lock_Pulse;
+DIGITAL_OUTPUT Schedule_Unlock_Pulse;
+DIGITAL_OUTPUT Manual_Lock_Pulse;
+DIGITAL_OUTPUT Manual_Unlock_Pulse;
+STRING_OUTPUT Command_To_Lock;
+DIGITAL_OUTPUT Alarm_Deadbolt_Jammed;
+DIGITAL_OUTPUT Alarm_Lock_Reset_To_Defaults;
+DIGITAL_OUTPUT Alarm_RF_Module_Power_Cycled;
+DIGITAL_OUTPUT Alarm_Wrong_Code_Limit;
+DIGITAL_OUTPUT Battery_Too_Low_To_Operate;
+DIGITAL_OUTPUT Battery_Level_Critical;
+DIGITAL_OUTPUT Battery_Level_Very_Low;
+DIGITAL_OUTPUT Battery_Level_Low;
+DIGITAL_OUTPUT LED_On_Pulse;
+DIGITAL_OUTPUT LED_Off_Pulse;
+DIGITAL_OUTPUT Auto_Relock_On_Pulse;
+DIGITAL_OUTPUT Auto_Relock_Off_Pulse;
+DIGITAL_OUTPUT Sound_On_Pulse;
+DIGITAL_OUTPUT Sound_Off_Pulse;
+DIGITAL_OUTPUT Attribute_Wait_Clear;
+
+/*******************************************************************************************
+  Global Variables
+  (Uncomment and declare global variables as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: myString = "";
+*******************************************************************************************/
+
+INTEGER iPacket, iEvent, iParameter, iSlot_Enable, iParameterFlag[13], iParameterValue[13], iSlotNumEnDis, iLockStatus;
+INTEGER Auto_Relock_Time_Val, Wrong_Code_Limit_Val, Shut_Down_Time_Value, iLockType, iProcessFromLock, iDelay;
+INTEGER iUserNumberIn;
+INTEGER iSlotNumVal, iSlotNumStatus;
+INTEGER iAddedSlotNumVal;
+INTEGER iDeletedSlotNumVal;
+INTEGER IReportSlotNumVal;
+INTEGER iAlarmSlotNumVal;
+INTEGER iEventSource, iEventCode;
+INTEGER iUserIDIn;
+INTEGER iAlarmCode;
+STRING sParameters[33], sStringToSend[33], sSlotNum[3], sPIN[8], sPINSend[8], sSetParameterData[23], sTrash[53], sPINText[8], sLockProductID[8], sSlotNumHold[3];
+STRING sSlotNumManage[3], sPINManage[8], sPINSendManage[8];
+STRING sUserNameManage[50], sUserName[50][30];
+
+INTEGER iSequenceNumber;
+INTEGER iUserNumberTemp;
+INTEGER iUserNumberFromModule;
+STRING sAlarmEvent[40];
+INTEGER iSemaphore;
+
+
+
+STRING_PARAMETER Lock_Name[50];
+
+/*******************************************************************************************
+  Functions
+  (Add any additional functions here)
+  Note:  Functions must be physically placed before the location in
+         the code that calls them.
+*******************************************************************************************/
+
+Function GetUserNumberStatus(INTEGER iNumber)
+{
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x01%s\x06%s\x00\x02\x01\x01\xFE", chr(iSequenceNumber), chr(iUserNumberIn));
+	Command_To_Lock = sStringToSend;
+}
+
+Function GetLogStatus()
+{
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x01%s\x04\x00\x00\x02\x01\x01\xFE", chr(iSequenceNumber));
+	Command_To_Lock = sStringToSend;
+}
+
+Function SetPIN(STRING sPIN)
+{
+	INTEGER a;
+	STRING sPINFormatted[8];
+
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x01%s\x05%s\x00\x01\x00%s%s\x02\x01\x01\xFE", chr(iSequenceNumber), chr(iUserNumberIn), chr(len(sPIN)), sPIN);
+	Command_To_Lock = sStringToSend;
+}
+
+Function SetPINFromModule(STRING sPIN)
+{
+	INTEGER a;
+	STRING sPINFormatted[8];
+
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x01%s\x05%s\x00\x01\x00%s%s\x02\x01\x01\xFE", chr(iSequenceNumber), chr(iUserNumberFromModule), chr(len(sPIN)), sPIN);
+	Command_To_Lock = sStringToSend;
+}
+
+Function DeleteUser(INTEGER iNumber)
+{
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x01%s\x07%s\x00\x02\x01\x01\xFE", chr(iSequenceNumber), chr(iUserNumberIn)); 	// clear PIN
+	Command_To_Lock = sStringToSend;
+}
+
+Function GetUserStatus(INTEGER iNumber)
+{
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x01%s\x0A%s\x00\x02\x01\x01\xFE", chr(iSequenceNumber), chr(iUserNumberIn));
+	Command_To_Lock = sStringToSend;
+}
+
+Function GetUserType(INTEGER iNumber)
+{
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x01%s\x15%s\x00\x02\x01\x01\xFE", chr(iSequenceNumber), chr(iUserNumberIn));
+	Command_To_Lock = sStringToSend;
+}
+
+Function SendAlarmText(INTEGER iNumber)
+{
+	cswitch(iNumber)
+	{
+		case(0x00): { Alarm_Deadbolt_Jammed = 1; Alarm_Deadbolt_Jammed = 0; sAlarmEvent = "Deadbolt Jammed"; break; }
+		case(0x01): { Alarm_Lock_Reset_To_Defaults = 1; Alarm_Lock_Reset_To_Defaults = 0; sAlarmEvent = "Lock Reset To Defaults"; break; }
+//		case(0x02): { Alarm_Reserved = 1; Alarm_Reserved = 0; sAlarmEvent = "Reserved"; break; }
+		case(0x03): { Alarm_RF_Module_Power_Cycled = 1; Alarm_RF_Module_Power_Cycled = 0; sAlarmEvent = "RF Module Power Cycled"; break; }
+		case(0x04): { Alarm_Wrong_Code_Limit = 1; Alarm_Wrong_Code_Limit = 0; sAlarmEvent = "Wrong Code Limit"; break; }
+//		case(0x05): { Alarm_Front_Cover_Removed = 1; Alarm_Front_Cover_Removed = 0; sAlarmEvent = "Front Cover Removed"; break; }
+//		case(0x06): { Alarm_Door_Forced_Open = 1; Alarm_Door_Forced_Open = 0; sAlarmEvent = "Door Forced Open"; break; }
+		case(0x10): { Battery_Too_Low_To_Operate = 1; Battery_Too_Low_To_Operate = 0; sAlarmEvent = "Battery Too Low To Operate"; break; }
+		case(0x11): { Battery_Level_Critical = 1; Battery_Level_Critical = 0; sAlarmEvent = "Battery Level Critical"; break; }
+		case(0x12): { Battery_Level_Very_Low = 1; Battery_Level_Very_Low = 0; sAlarmEvent = "Battery Level Very Low"; break; }
+		case(0x13): { Battery_Level_Low = 1; Battery_Level_Low = 0; sAlarmEvent = "Battery Level Low"; break; }
+	}
+	if(len(Lock_Name))
+		Alarm_Event_Text = Lock_Name + ": " + sAlarmEvent;
+	else
+		Alarm_Event_Text = sAlarmEvent;
+}
+
+Function GetAttributeStatus()
+{
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x00%s\x00\x22\x00\x23\x00\x24\x00\x02\x01\x01\xFE", chr(iSequenceNumber));
+	Command_To_Lock = sStringToSend;
+}
+
+/*******************************************************************************************
+  Event Handlers
+  (Uncomment and declare additional event handlers as needed)
+*******************************************************************************************/
+
+PUSH Lock
+{
+	STRING sStringToSend[50];
+
+	iSequenceNumber = iSequenceNumber + 1;
+	if(getlastmodifiedarrayindex() = 1)
+		makestring(sStringToSend, "\x01%s\x00\x02\x01\x01\xFE", chr(iSequenceNumber));	// lock
+	else if(getlastmodifiedarrayindex() = 2)
+		makestring(sStringToSend, "\x01%s\x01\x02\x01\x01\xFE", chr(iSequenceNumber));	// unlock
+	else if(getlastmodifiedarrayindex() = 3)
+		makestring(sStringToSend, "\x01%s\x02\x02\x01\x01\xFE", chr(iSequenceNumber));	// toggle
+	Command_To_Lock = sStringToSend;
+	
+}
+
+PUSH Read_Lock_State_Attribute
+{
+	STRING sStringToSend[50];
+
+	iSequenceNumber = iSequenceNumber + 1;	
+	makestring(sStringToSend, "\x00%s\x00\x00\x00\x02\x01\x01\xFE", chr(iSequenceNumber));	// read lock state attribute
+	Command_To_Lock = sStringToSend;
+}
+ 
+CHANGE Command_From_Lock
+{
+	STRING sClusterID[2];
+	INTEGER iCommandID;
+	INTEGER iFrameControl;
+	STRING sData[50];
+	STRING sAttributeID[2];
+	STRING sAttributeReadStatus[1];
+	STRING sAttributeDataType[2];
+	STRING sAttributeValue[4];
+	STRING sAttributeWriteStatus[1];
+	STRING sResponse[40]; 
+	INTEGER iLogEntry;
+	INTEGER iTimeStamp;
+	INTEGER iEventType;
+	INTEGER iSource;
+	INTEGER iEventIDAlarmCode;
+	INTEGER iUserID;
+	STRING sPINID[8];
+	STRING sLockEvent[100];
+	STRING sUserNameIn[50];
+	INTEGER iStatus, iAlarm;
+	if(iSemaphore = 0)
+	{
+     
+		iSemaphore = 1;
+		while(find("\x02\x01\x01\xFE", Command_From_Lock) || find("\x02\x09\x00\xFE", Command_From_Lock))
+		{
+			iStatus = find("\x02\x01\x01\xFE", Command_From_Lock);
+			iAlarm = find("\x02\x09\x00\xFE", Command_From_Lock);
+	
+			if(iStatus = 0)		// no status response in string
+				sResponse = remove("\x02\x09\x00\xFE", Command_From_Lock);	// remove alarm response
+	
+			else if(iAlarm = 0)	// no alarm response in string
+				sResponse = remove("\x02\x01\x01\xFE", Command_From_Lock);	// remove status response
+	
+			else if(iStatus < iAlarm)	// status response is before alarm response
+				sResponse = remove("\x02\x01\x01\xFE", Command_From_Lock);	// remove status response
+	
+			else if(iAlarm > iStatus)	// alarm response is before status response	
+				sResponse = remove("\x02\x09\x00\xFE", Command_From_Lock);	// remove alarm response
+	
+	
+			iFrameControl = byte(sResponse, 1);							// get frame control
+			sClusterID = mid(sResponse, len(sResponse) - 2, 2);	// get cluster id
+			iCommandID = byte(sResponse, 3);							// get command id
+		
+			if(len(sResponse) > 7)										// if variable data exists
+			sData = mid(sResponse, 4, len(sResponse) - 7);		// get variable data			
+			if(sClusterID = "\x01\x01")							// door lock cluster
+			{
+				switch(iFrameControl)							
+				{
+					case(0x18):						
+					{
+						switch(iCommandID)						// check command id
+						{
+							case(0x01):							// attribute read response
+							{
+								sAttributeID = left(sData, 2);
+								sAttributeReadStatus = mid(sData, 3, 1);		// status of read
+								sAttributeDataType = mid(sData, 4, 1);
+								if(sAttributeID = "\x00\x00" && sAttributeReadStatus = "\x00")			// lock state attribute && success
+								{
+									sAttributeValue = mid(sData, 5, 1);
+									if(sAttributeValue = "\x00")			
+									{
+										Not_Fully_Locked_Pulse = 1;
+										Not_Fully_Locked_Pulse = 0;
+									}
+									if(sAttributeValue = "\x01")
+									{
+										Locked_Pulse = 1;
+										Locked_Pulse = 0;
+									}
+									if(sAttributeValue = "\x02")
+									{
+										Unlocked_Pulse = 1;
+										Unlocked_Pulse = 0;
+									}
+								}
+								if(sAttributeID = "\x22\x00" && sAttributeReadStatus = "\x00")			// attribute status && read success
+								{
+									sAttributeValue = mid(sData, 5, 1);									// led data
+									if(sAttributeValue = "\x00")				// led off
+									{
+										LED_Off_Pulse = 1;
+										LED_Off_Pulse = 0;
+									}
+									if(sAttributeValue = "\x02")				// led on
+									{
+										LED_On_Pulse = 1;
+										LED_On_Pulse = 0;
+									}
+		
+									sAttributeValue = mid(sData, 10,4);									// auto relock data
+									if(sAttributeValue = "\x00\x00\x00\x00")	// auto relock off
+									{
+										Auto_Relock_Off_Pulse = 1;
+										Auto_Relock_Off_Pulse = 0;
+									}
+									else										// auto relock on
+									{
+										Auto_Relock_On_Pulse = 1;
+										Auto_Relock_On_Pulse = 0;
+									}
+									sAttributeValue = mid(sData, 18,1);									// sound data
+									if(sAttributeValue = "\x00")				//  sound off
+									{
+										Sound_Off_Pulse = 1;
+										Sound_Off_Pulse = 0;
+									}
+									if(sAttributeValue = "\x02")				//  sound on
+									{
+										Sound_On_Pulse = 1;
+										Sound_On_Pulse = 0;
+									}
+									Attribute_Wait_Clear = 1;
+									Attribute_Wait_Clear = 0;
+								}
+							}
+		
+							case(0x04):							// attribute write response
+							{
+								sAttributeWriteStatus = left(sData, 1);		// status of write
+								if(sAttributeWriteStatus = "\x00")			// successfull write
+								{
+									GetAttributeStatus();
+								}
+							}
+						}
+					}
+					case(0x19):								
+					{
+						switch(iCommandID)						// check command id
+						{
+							case(0x00):							// lock command response .. \x19\xTS\xAA\xBB\x02\x01\x01\xFE....TS=transaction seq, AA=command id, BB=success/failure 	
+							{																
+								sLockEvent = "";
+								if(sData = "\x00")						// lock command success
+								{
+									Lock_Success_Pulse = 1;
+									Lock_Success_Pulse = 0;
+								}
+								else if(sData = "\x01")					// lock command fail		
+								{
+									Lock_Failure_Pulse = 1;
+									Lock_Failure_Pulse = 0;
+								}
+							}
+		
+							case(0x01):							// unlock command response
+							{
+								sLockEvent = "";
+								if(sData = "\x00")						// unlock command success
+								{
+									Unlock_Success_Pulse = 1;
+									Unlock_Success_Pulse = 0;
+								}
+								else if(sData = "\x01")					// unlock command failure
+								{
+									Unlock_Failure_Pulse = 1;
+									Unlock_Failure_Pulse = 0;
+								}
+							}
+							case(0x02):							// toggle command response
+							{
+								if(sData = "\x00")						// toggle command success
+								{
+									Toggle_Success_Pulse = 1;
+									Toggle_Success_Pulse = 0;
+								}
+								else if(sData = "\x01")					// toggle command failure		
+								{
+									Toggle_Failure_Pulse = 1;
+									Toggle_Failure_Pulse = 0;
+								}
+							}
+		
+							case(0x04):							// get log record response
+							{
+								iLogEntry = byte(sData, 1) + byte(sData, 2) * 0x0100;							
+								iTimeStamp = byte(sData, 3) + byte(sData, 4) * 0x0100;							
+								iEventType = byte(sData, 7);							
+								iSource = byte(sData, 8);							
+								iEventIDAlarmCode = byte(sData, 9);
+								iUserID = byte(sData, 10) + byte(sData, 11) * 0x0100;
+								if(len(sData) > 12)
+									sPinID = mid(sData, 13, len(sData) - 2);
+								else
+									sPinID = "";
+								sLockEvent = "";
+								if(iSource = 0)
+								{
+									switch(iEventIDAlarmCode)
+									{
+										case(0x00):
+											{ Unknown_Event_Pulse = 1; Unknown_Event_Pulse = 0; sLockEvent = "Unknown event"; }
+										case(0x01):
+											{ Locked_Via_Keypad_Pulse = 1; Locked_Via_Keypad_Pulse = 0; sLockEvent = "Locked by keypad"; }
+										case(0x02):
+											{ Unlocked_Via_Keypad_Pulse = 1; Unlocked_Via_Keypad_Pulse = 0; sLockEvent = "Unlocked by keypad"; }
+	//									case(0x03):
+	//										{ Lock_Error_Invalid_PIN_Pulse = 1; Lock_Error_Invalid_PIN_Pulse = 0; sLockEvent = "Lock failed - Invalid PIN"; }
+	//									case(0x04):
+	//										{ Lock_Error_Invalid_Schedule_Pulse = 1; Lock_Error_Invalid_Schedule_Pulse = 0; sLockEvent = "Lock failed - Invalid schedule"; }
+	//									case(0x05):
+	//										{ Unlock_Error_Invalid_PIN_Pulse = 1; Unlock_Error_Invalid_PIN_Pulse = 0; sLockEvent = "Unlock failed - Invalid PIN"; }
+	//									case(0x06):
+	//										{ Unlock_Error_Invalid_Schedule_Pulse = 1; Unlock_Error_Invalid_Schedule_Pulse = 0; sLockEvent = "Unlock failed - Invalid schedule"; }
+									}
+								}
+								if(iSource = 1)
+								{
+									switch(iEventIDAlarmCode)
+									{
+										case(0x00):
+											{ Unknown_Event_Pulse = 1; Unknown_Event_Pulse = 0; sLockEvent = "Unknown event"; }
+										case(0x01):
+											{ Locked_Via_RF_Pulse = 1; Locked_Via_RF_Pulse = 0; sLockEvent = "Locked remotely"; }
+										case(0x02):
+											{ Unlocked_Via_RF_Pulse = 1; Unlocked_Via_RF_Pulse = 0; sLockEvent = "Unlocked remotely"; }
+									}
+								}
+		
+								if(iSource = 2)
+								{
+									switch(iEventIDAlarmCode)
+									{
+										case(0x00):
+											{ Unknown_Event_Pulse = 1; Unknown_Event_Pulse = 0; sLockEvent = "Unknown event"; }
+										case(0x01):
+											{ Locked_Via_Thumbturn_Pulse = 1; Locked_Via_Thumbturn_Pulse = 0; sLockEvent = "Locked by thumbturn"; }
+										case(0x02):
+											{ Unlocked_Via_Thumbturn_Pulse = 1; Unlocked_Via_Thumbturn_Pulse = 0; sLockEvent = "Unlocked by thumbturn"; }
+										case(0x07):
+											{ One_Touch_Lock_Pulse = 1; One_Touch_Lock_Pulse = 0; sLockEvent = "Locked by one-touch"; }
+										case(0x08):
+											{ Locked_Via_Key_Pulse = 1; Locked_Via_Key_Pulse = 0; sLockEvent = "Locked by keypad"; }
+										case(0x09):
+											{ Unlocked_Via_Key_Pulse = 1; Unlocked_Via_Key_Pulse = 0; sLockEvent = "Unlocked by keypad"; }
+										case(0x0A):
+											{ Auto_Lock_Pulse = 1; Auto_Lock_Pulse = 0; sLockEvent = "Locked by auto-lock"; }
+										case(0x0B):
+											{ Schedule_Lock_Pulse = 1; Schedule_Lock_Pulse = 0; sLockEvent = "Locked by schedule"; }
+										case(0x0C):
+											{ Schedule_Unlock_Pulse = 1; Schedule_Unlock_Pulse = 0; sLockEvent = "Unlocked by schedule"; }
+										case(0x0D):
+											{ Manual_Lock_Pulse = 1; Manual_Lock_Pulse = 0; sLockEvent = "Locked by key or thumbturn"; }
+										case(0x0E):
+											{ Manual_Unlock_Pulse = 1; Manual_Unlock_Pulse = 0; sLockEvent = "Unlocked by key or thumbturn"; }
+									}
+								}
+								if(len(sLockEvent))
+								{
+									if(len(Lock_Name))
+										Lock_Event_Text = Lock_Name + ": " + sLockEvent;
+									else
+										Lock_Event_Text = sLockEvent;
+								}
+							}
+		
+							case(0x05):							// set pin code response
+							{
+								if(sData = "\x00")
+									User_Event_Text = "Set PIN Successful";
+								else if(sData = "\x01")
+									User_Event_Text = "Set PIN Failure";
+								else if(sData = "\x02")
+									User_Event_Text = "PIN Memory Full";
+								else if(sData = "\x03")
+									User_Event_Text = "PIN Duplicate Code Error";
+							}
+		
+							case(0x06):							// get pin code response
+							{
+								iUserNumberTemp = byte(sData, 1) + byte(sData, 2) * 0x0100;
+								User_Number_Text_Out = itoa(iUserNumberTemp + 1);	// user id selected.  note, id's are from (0-29) but displayed as (1-30)
+								if(byte(sData, 3) = 0x00)
+									User_Status_Text_Out = "User Available";
+								else if(byte(sData, 3) = 0x01)
+									User_Status_Text_Out = "User Occupied/Enabled";
+								else if(byte(sData, 3) = 0x02)
+									User_Status_Text_Out = "User Reserved";
+								else if(byte(sData, 3) = 0x03)
+									User_Status_Text_Out = "User Occupied/Disabled";
+		//						else if(byte(sData, 3) = 0xFF)
+		//							User_Status_Text_Out = "User Not Supported";
+		
+		//						if(byte(sData, 4) = 0x00)
+		//							User_Event_Text = "Unrestricted User";
+		//						else if(byte(sData, 4) = 0x01)
+		//							User_Event_Text = "Access Scheduled Once";
+		//						else if(byte(sData, 4) = 0x02)
+		//							User_Event_Text = "Access Scheduled Weekly";
+		//						else if(byte(sData, 4) = 0x03)
+		//							User_Event_Text = "Master User";
+		//						else if(byte(sData, 4) = 0xFF)
+		//							User_Event_Text = "Not Supported";
+		
+								if(byte(sData, 5) > 0)	// if pin code exists
+									User_PIN_Text_Out = mid(sData, 6, byte(sData, 5));
+								else	
+									User_PIN_Text_Out = "None Assigned";
+		
+								if(len(sUserName[iUserNumberTemp]))
+									User_Name_Text_Out = sUserName[iUserNumberTemp];
+								else
+									User_Name_Text_Out = "User ID " + itoa(iUserNumberTemp + 1);
+							}
+		
+							case(0x07):							// clear pin code response
+							{
+								if(sData = "\x00")
+									User_Event_Text = "User ID Deleted";
+								else if(sData = "\x01")
+									User_Event_Text = "Clear PIN Failure Or PIN Already Deleted";
+							}
+		
+							case(0x08):							// clear all pin code response
+							{
+								if(sData = "\x00")
+								{
+									User_Event_Text = "Clear All PINs Successful";
+									// refresh currently selected user number status
+									GetUserNumberStatus(iUserNumberIn);
+								}			
+								else if(sData = "\x01")
+									User_Event_Text = "Clear All PINs Failure";
+							}
+		
+							case(0x09):							// set user status response
+							{
+								if(sData = "\x00")
+								{
+		//							User_Event_Text = "Set User Status Successful";
+									GetUserStatus(iUserNumberIn);
+		    					}
+								else if(sData = "\x01")
+									User_Event_Text = "Set User Status Failure";
+							}
+							case(0x0A):							// get user status response
+							{
+								iUserNumberTemp = byte(sData, 1) + byte(sData, 2) * 0x0100;
+								User_Number_Text_Out = itoa(iUserNumberTemp + 1);	// user id selected.  note, id's are from (0-29) but displayed as (1-30)
+		
+								if(byte(sData, 3) = 0x00)
+									User_Status_Text_Out = "User Available";
+								else if(byte(sData, 3) = 0x01)
+									User_Status_Text_Out = "User Occupied/Enabled";
+								else if(byte(sData, 3) = 0x02)
+									User_Status_Text_Out = "User Reserved";
+								else if(byte(sData, 3) = 0x03)
+									User_Status_Text_Out = "User Occupied/Disabled";
+		//						else if(byte(sData, 3) = 0xFF)
+		//							User_Status_Text_Out = "User Not Supported";
+							}
+							case(0x14):							// set user type response
+							{
+								if(sData = "\x00")
+								{
+		//							User_Event_Text = "Set User Type Successful";
+									GetUserType(iUserNumberIn);
+		    					}
+								else if(sData = "\x01")
+									User_Event_Text = "Set User Type Failure";
+							}
+							case(0x15):							// get user type response
+							{
+								iUserNumberTemp = byte(sData, 1) + byte(sData, 2) * 0x0100;
+								User_Number_Text_Out = itoa(iUserNumberTemp + 1);	// user id selected.  note, id's are from (0-29) but displayed as (1-30)
+		
+								if(byte(sData, 3) = 0x00)
+									User_Event_Text = "Unrestricted User";
+								else if(byte(sData, 3) = 0x01)
+									User_Event_Text = "Access Scheduled Once";
+								else if(byte(sData, 3) = 0x02)
+									User_Event_Text = "Access Scheduled Weekly";
+								else if(byte(sData, 3) = 0x03)
+									User_Event_Text = "Master User";
+							}
+							case(0x20):							// operation event notification
+							{
+								iEventSource = byte(sData, 1);							
+								iEventCode = byte(sData, 2);							
+								iUserIDIn = byte(sData, 3) + byte(sData, 4) * 0x0100;	// will need to query for pin by this user id			
+								sLockEvent = "";
+								if(iUserIDIn < 30)
+								{	
+									if(len(sUserName[iUserIDIn]))
+										sUserNameIn = sUserName[iUserIDIn];
+									else
+										sUserNameIn = "User ID " + itoa(iUserIDIn + 1);
+								}
+								if(iEventSource = 0)
+								{	
+									switch(iEventCode)	// keypad operation
+									{
+										case(0x00):
+											{ Not_Fully_Locked_Pulse = 1; Not_Fully_Locked_Pulse = 0; sLockEvent = "Not fully locked by " + sUserNameIn; }
+										case(0x01):
+											{ Locked_Via_Keypad_Pulse = 1; Locked_Via_Keypad_Pulse = 0; sLockEvent = "Locked by " + sUserNameIn; Locked_Slot_Num_Val = iUserIDIn + 1; }
+										case(0x02):
+											{ Unlocked_Via_Keypad_Pulse = 1; Unlocked_Via_Keypad_Pulse = 0; sLockEvent = "Unlocked by " + sUserNameIn;  Unlocked_Slot_Num_Val = iUserIDIn + 1; }
+									}
+								}
+								if(iEventSource = 1)
+								{
+									switch(iEventCode)
+									{
+										case(0x00):
+											{ Not_Fully_Locked_Pulse = 1; Not_Fully_Locked_Pulse = 0; sLockEvent = "Not fully locked remotely"; }
+										case(0x01):
+											{ Locked_Via_RF_Pulse = 1; Locked_Via_RF_Pulse = 0; sLockEvent = "Locked remotely"; }
+										case(0x02):
+											{ Unlocked_Via_RF_Pulse = 1; Unlocked_Via_RF_Pulse = 0; sLockEvent = "Unlocked remotely"; }
+									}
+								}
+		
+								if(iEventSource = 2)
+								{
+									switch(iEventCode)
+									{
+										case(0x00):
+											{ Not_Fully_Locked_Pulse = 1; Not_Fully_Locked_Pulse = 0; sLockEvent = "Not fully locked"; }
+										case(0x07):
+											{ One_Touch_Lock_Pulse = 1; One_Touch_Lock_Pulse = 0; sLockEvent = "Locked by one-touch"; }
+										case(0x0A):
+											{ Auto_Lock_Pulse = 1; Auto_Lock_Pulse = 0; sLockEvent = "Locked by auto-lock"; }
+										case(0x0D):
+											{ Manual_Lock_Pulse = 1; Manual_Lock_Pulse = 0; sLockEvent = "Locked by key or thumbturn"; }
+										case(0x0E):
+											{ Manual_Unlock_Pulse = 1; Manual_Unlock_Pulse = 0; sLockEvent = "Unlocked by key or thumbturn"; }
+									}
+								}
+								if(len(sLockEvent))
+								{
+									if(len(Lock_Name))
+										Lock_Event_Text = Lock_Name + ": " + sLockEvent;
+									else
+										Lock_Event_Text = sLockEvent;
+								}
+							}
+							case(0x21):							// programming event notification
+							{
+								iEventSource = byte(sData, 1);							
+								iEventCode = byte(sData, 2);							
+								iUserIDIn = byte(sData, 3) + byte(sData, 4) * 0x0100;	// will need to query for pin by this user id if necessary						
+								sLockEvent = "";
+								if(iEventSource = 0)	// keypad programming event
+								{	
+									switch(iEventCode)	// keypad operation
+									{
+										case(0x02):
+											{ sLockEvent = "PIN added by keypad"; }
+									}
+								}
+								if(len(sLockEvent))
+								{
+									if(len(Lock_Name))
+										Lock_Event_Text = Lock_Name + ": " + sLockEvent;
+									else
+										Lock_Event_Text = sLockEvent;
+								}
+							}
+						}
+					}
+				}
+			}
+	
+			if(sClusterID = "\x09\x00")							// alarm cluster
+			{
+				switch(iFrameControl)							
+				{
+					case(0x19):								
+					{
+						switch(iCommandID)						// check command id
+						{
+							case(0x01):							// get alarm response 	
+							{
+								if(byte(sData, 1) = 0x00)
+								{
+								//	Alarm_Event_Text = "Success";
+									iAlarmCode = byte(sData, 2);
+									SendAlarmText(iAlarmCode);
+								}
+		//						else if(byte(sData, 1) = 0x8B)
+		//							Alarm_Event_Text = "Not Found";
+							}
+							case(0x00):							// unsolicited alarm report 	
+							{
+								iAlarmCode = byte(sData, 1);
+								SendAlarmText(iAlarmCode);
+							}
+						}
+					}
+					case(0x18):								
+					{
+						switch(iCommandID)						// check command id
+						{
+							case(0x0B):							// command id for default response 	
+							{
+								if(byte(sData, 1) = 0x00)		// reset alarm response
+								{							
+									iAlarmCode = byte(sData, 2);
+									SendAlarmText(iAlarmCode);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		iSemaphore = 0;
+	}
+}
+
+CHANGE User_Number_Text_In		// user ID text from keyboard
+{
+	INTEGER a;
+	INTEGER iInvalid;
+	iInvalid = 0;
+	for(a = 1 to len(User_Number_Text_In))
+	{
+		if(byte(User_Number_Text_In, a) < 48 || byte(User_Number_Text_In, a) > 57)  // if not a complete number
+		{
+			iInvalid = 1;
+			break;
+		}
+	}
+	if(iInvalid = 1)
+	{
+		User_Event_Text = "User number must be a number";
+	}
+	else if(atoi(User_Number_Text_In) > 0 && atoi(User_Number_Text_In) <= ciMaxUserNumbers)
+	{
+		iUserNumberIn = atoi(User_Number_Text_In) - 1;
+		GetUserNumberStatus(iUserNumberIn);
+		User_Event_Text = "";
+	}
+	else
+		User_Event_Text = "Please select a User ID between 1 and " + itoa(ciMaxUserNumbers);
+}
+
+CHANGE User_Name_Text_In
+{
+	if(iUserNumberIn = 0 || (iUserNumberIn > 0 && iUserNumberIn < ciMaxUserNumbers))	// user number needs to be 0 - 29
+	{
+		sUserName[iUserNumberIn] = User_Name_Text_In;
+		GetUserNumberStatus(iUserNumberIn);
+	}
+	else
+		User_Event_Text = "Please select a User ID between 1 and " + itoa(ciMaxUserNumbers);
+}
+
+CHANGE User_PIN_Text_In
+{
+	INTEGER iInvalid;
+	INTEGER a;
+
+	if(iUserNumberIn = 0 || (iUserNumberIn > 0 && iUserNumberIn < ciMaxUserNumbers))	// user number needs to be 0 - 29
+	{
+		iInvalid = 0;
+		for(a = 1 to len(User_PIN_Text_In))
+		{
+			if(byte(User_PIN_Text_In, a) < 48 || byte(User_PIN_Text_In, a) > 57)
+			{
+				iInvalid = 1;
+				break;
+			}
+		}
+		if(len(User_PIN_Text_In) > 8 || len(User_PIN_Text_In) < 4)
+			iInvalid = 1;
+		if(iInvalid = 1)
+			User_Event_Text = "PIN must have 4-8 digits";
+		else
+		{
+			SetPIN(User_Pin_Text_In);
+			GetUserNumberStatus(iUserNumberIn);
+		}
+	}
+	else
+		User_Event_Text = "Please select a User ID between 1 and " + itoa(ciMaxUserNumbers);
+}
+
+PUSH Selected_User_Delete
+{
+	clearbuffer(sUserName[iUserNumberIn]);
+	DeleteUser(iUserNumberIn);
+	GetUserNumberStatus(iUserNumberIn);
+}
+
+PUSH Set_User_Status
+{
+	STRING sStringToSend[50];
+
+	iSequenceNumber = iSequenceNumber + 1;	
+	makestring(sStringToSend, "\x01%s\x09%s\x00%s\x02\x01\x01\xFE", chr(iSequenceNumber), chr(iUserNumberIn), chr(getlastmodifiedarrayindex() - 1));
+	Command_To_Lock = sStringToSend;
+}
+
+PUSH Set_User_Type
+{
+	STRING sStringToSend[50];
+
+	iSequenceNumber = iSequenceNumber + 1;	
+	makestring(sStringToSend, "\x01%s\x14%s\x00%s\x02\x01\x01\xFE", chr(iSequenceNumber), chr(iUserNumberIn), chr(getlastmodifiedarrayindex() - 1));
+	Command_To_Lock = sStringToSend;
+}
+
+PUSH Clear_All_PIN_Codes
+{
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x01%s\x08\x02\x01\x01\xFE", chr(iSequenceNumber));
+	Command_To_Lock = sStringToSend;
+}
+
+PUSH Clear_User_Settings
+{
+	// valid user numbers are 0 - 30
+	iUserNumberIn = 99;
+	User_Number_Text_Out = "";
+	User_Name_Text_Out = "";
+	User_PIN_Text_Out = "";
+	User_Status_Text_Out = "";
+}
+
+CHANGE From_Module_User_ID
+{
+	iUserNumberFromModule = atoi(From_Module_User_ID) - 1;
+}
+
+CHANGE From_Module_User_Name
+{
+		sUserName[iUserNumberFromModule] = From_Module_User_Name;
+}
+
+PUSH From_Module_Set_User_PIN
+{
+	SetPINFromModule(From_Module_User_Pin);
+}
+
+PUSH From_Module_Delete_All_Users
+{
+	INTEGER a;
+	iSequenceNumber = iSequenceNumber + 1;
+	makestring(sStringToSend, "\x01%s\x08\x02\x01\x01\xFE", chr(iSequenceNumber));
+	Command_To_Lock = sStringToSend;
+	for(a = 1 to ciMaxUserNumbers)
+		clearbuffer(sUserName[a - 1]);
+
+}
+
+PUSH Set_LED
+{
+	STRING sStringToSend[50];
+
+	iSequenceNumber = iSequenceNumber + 1;
+	if(getlastmodifiedarrayindex() = 1)	
+		makestring(sStringToSend, "\x00%s\x02\x22\x00\x20\x02\x02\x01\x01\xFE", chr(iSequenceNumber));	// led on
+	else if(getlastmodifiedarrayindex() = 2)	
+		makestring(sStringToSend, "\x00%s\x02\x22\x00\x20\x00\x02\x01\x01\xFE", chr(iSequenceNumber));	// led off
+	Command_To_Lock = sStringToSend;
+}
+
+PUSH Set_Auto_Relock
+{
+	STRING sStringToSend[50];
+
+	iSequenceNumber = iSequenceNumber + 1;
+	if(getlastmodifiedarrayindex() = 1)	
+		makestring(sStringToSend, "\x00%s\x02\x23\x00\x23\x1E\x00\x00\x00\x02\x01\x01\xFE", chr(iSequenceNumber));	// auto relock on
+	else if(getlastmodifiedarrayindex() = 2)	
+		makestring(sStringToSend, "\x00%s\x02\x23\x00\x23\x00\x00\x00\x00\x02\x01\x01\xFE", chr(iSequenceNumber));	// auto relock off
+	Command_To_Lock = sStringToSend;
+}
+
+PUSH Set_Sound
+{
+	STRING sStringToSend[50];
+
+	iSequenceNumber = iSequenceNumber + 1;
+	if(getlastmodifiedarrayindex() = 1)	
+		makestring(sStringToSend, "\x00%s\x02\x24\x00\x20\x02\x02\x01\x01\xFE", chr(iSequenceNumber));	// sound on
+	else if(getlastmodifiedarrayindex() = 2)	
+		makestring(sStringToSend, "\x00%s\x02\x24\x00\x20\x00\x02\x01\x01\xFE", chr(iSequenceNumber));	// sound off
+	Command_To_Lock = sStringToSend;
+}
+
+PUSH Get_Attribute_Status
+{
+	GetAttributeStatus();
+}
+
+/*******************************************************************************************
+  Main()
+  Uncomment and place one-time startup code here
+  (This code will get called when the system starts up)
+*******************************************************************************************/
+
+Function Main()
+{
+	iSemaphore = 0;
+	iProcessFromLock = 0;
+}
+
+

@@ -1,0 +1,642 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+*******************************************************************************************/
+/*
+Dealer Name:ControlWorks Consulting, LLC.
+System Name:DIRECTV IP Engine (ControlWorks) v1
+System Number:
+Programmer:gary@controlworks.com
+Revision History:
+	v1 -- gary@controlworks.com
+		Initial release
+	v1.1 -- caleb@controlworks.com
+		Added music tag outputs
+		Added workaround for 2-series systems that would not report the correct socket status and cause the socket state to "remain busy" when it was closed.  
+
+Comments:	Copyright (C) 2015 ControlWorks Consulting, LLC All Rights Reserved – Use Subject to License.
+			US Government Restricted Rights. Use, duplication or disclosure by the Government is subject to restrictions set forth in subparagraphs (a)-(d) of FAR 52.227-19. 
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+*******************************************************************************************/
+#SYMBOL_NAME "DIRECTV IP Engine (ControlWorks) v1.1"
+#CATEGORY "1" 																				// hidden
+#DEFAULT_VOLATILE
+#ENABLE_STACK_CHECKING
+#ENABLE_TRACE
+#HELP_BEGIN
+***Use of this module on a standalone basis is unsuppored by ControlWorks***
+Copyright (C) 2015 ControlWorks Consulting, LLC All Rights Reserved – Use Subject to License.
+US Government Restricted Rights. Use, duplication or disclosure by the Government is subject to restrictions set forth in subparagraphs (a)-(d) of FAR 52.227-19.
+For use inside the DIRECTV_IP_(ControlWorks)_v1.umc module only. Any other use is not supported.
+#HELP_END
+
+#DEFINE_CONSTANT	TAG_DELIMETER		","													//delimeter between tags - usually just "," sometimes ",\x0A"
+#DEFINE_CONSTANT	TAG_VALUE_DELIMITER	":\x20"												//delimeter between tag and tag value
+#DEFINE_CONSTANT	MAX_TAGS			30													//set maximum number of tags that can be parsed out
+#DEFINE_CONSTANT	SERVERPORT			8080												//server TCP/IP port
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+*******************************************************************************************/
+
+DIGITAL_INPUT enable_debug;
+DIGITAL_INPUT tcp_waiting_timeout;															//command from umc to indicate a timeout
+DIGITAL_INPUT tcp_connected_timeout;														//command from umc to indicate a timeout
+DIGITAL_INPUT enable_timeout_logs;															//command from umc to enable timeout logs to be logged to the errror log
+
+ANALOG_INPUT tune_channel;
+
+STRING_INPUT command$[256];																	//command from .umc to send to unit
+STRING_INPUT tune_channel$[10];																//input from the keypad
+STRING_INPUT info_channel$[10];
+STRING_INPUT remote_key$[256];																//input from umc containg ir remote key commands
+STRING_INPUT client_address$[64];
+STRING_INPUT server_ip_address$[16];
+
+ANALOG_OUTPUT duration;																		//duration of currently tuned programming
+ANALOG_OUTPUT parental_control_mode;														//1=locked, 2=temporarily unlocked, 3=unlocked
+ANALOG_OUTPUT major_channel_number;															//
+ANALOG_OUTPUT minor_channel_number;															//
+ANALOG_OUTPUT offset;																		//
+ANALOG_OUTPUT power_mode;
+ANALOG_OUTPUT other_duration;																//duration of currently tuned programming
+ANALOG_OUTPUT other_parental_control_mode;													//1=locked, 2=temporarily unlocked, 3=unlocked
+ANALOG_OUTPUT other_major_channel_number;													//
+ANALOG_OUTPUT other_minor_channel_number;													//
+ANALOG_OUTPUT other_offset;	
+ANALOG_OUTPUT tcp_socket_status;															//
+
+STRING_OUTPUT channel$;
+STRING_OUTPUT call_sign$;																	//text - currently tuned station call sign
+STRING_OUTPUT program_id;																	//
+STRING_OUTPUT rating$;																		//
+STRING_OUTPUT start_time$;																	//
+STRING_OUTPUT station_id$;																	//
+STRING_OUTPUT title$;																		//
+STRING_OUTPUT air_date$;
+STRING_OUTPUT access_card_id$;
+STRING_OUTPUT receiver_id$;
+STRING_OUTPUT receiver_software_version$;
+STRING_OUTPUT shef_version$;
+STRING_OUTPUT other_channel$;
+STRING_OUTPUT other_call_sign$;																//text - currently tuned station call sign
+STRING_OUTPUT other_program_id;																//
+STRING_OUTPUT other_rating$;																//
+STRING_OUTPUT other_start_time$;															//
+STRING_OUTPUT other_station_id$;															//
+STRING_OUTPUT other_title$;																	//
+STRING_OUTPUT other_air_date$;
+STRING_OUTPUT music_station_artist$;														//new v1.1
+STRING_OUTPUT music_station_cd$;															//new v1.1
+STRING_OUTPUT music_station_title$;															//new v1.1
+
+DIGITAL_OUTPUT polling_busy;
+DIGITAL_OUTPUT off_air;																		//current program is ATSC
+DIGITAL_OUTPUT is_ppv;																		//
+DIGITAL_OUTPUT is_recording;																//
+DIGITAL_OUTPUT is_vod;																		//
+DIGITAL_OUTPUT other_off_air;																//current program is ATSC
+DIGITAL_OUTPUT other_is_ppv;																//
+DIGITAL_OUTPUT other_is_recording;															//
+DIGITAL_OUTPUT other_is_vod;
+																		
+TCP_CLIENT tcpTcpCommand[2048];
+
+/*******************************************************************************************
+  Global Variables
+*******************************************************************************************/
+STRING gsCallSign$[64];																		//persistent storage for call sign
+STRING gsRating$[64];
+STRING gsSymbolName$[64];
+STRING gsTagLine$[64][256];
+
+SIGNED_INTEGER gitcpTcpCommandStatus;
+INTEGER giSemaphore;
+INTEGER giQueueIndex;
+INTEGER giMajor;																			//persistent storage for major channel number
+INTEGER giMinor;																			
+INTEGER giProgramId;
+INTEGER giDebug;
+
+STRUCTURE tcpQueueData {																	//structure for storing the tcp queue data
+	INTEGER type;																			//
+	STRING queueCommand$[128];
+};
+tcpQueueData tcpQueue[20];																	// 
+STRUCTURE json {																			//structure to hold and organize tags and tag values
+	STRING tag$[64];																		//just the tag
+	STRING tagValue$[1024];																	//just the value
+};
+json structureTagTable[36];
+/*******************************************************************************************
+  Functions
+*******************************************************************************************/
+FUNCTION ClearTcpQueue(){
+	INTEGER i;																					//Function to clear the tcpQueue
+	
+	IF(giDebug=1)	{TRACE("ClearTcpQueue - Emptying Queue\r");	}
+	FOR(i = 0 TO 15) {
+		tcpQueue[i].queueCommand$ = "";
+		IF(giDebug=1)	{TRACE("Emptying Queue: queue %d=%s\r",i,tcpQueue[i].queueCommand$);	}
+	}
+	giQueueIndex = 0;
+	IF(giDebug=1)	{TRACE("ClearTcpQueue - giQueueIndex set to 0\r");	}
+}
+
+FUNCTION connectSocket() {
+	SIGNED_INTEGER lsiStatus;
+
+	IF(giSemaphore = 0 && (lsiStatus = 0 || lsiStatus=3 || lsiStatus=4 || lsiStatus=5 || lsiStatus=7 || lsiStatus=8)){
+		giSemaphore = 1;
+		lsiStatus = SOCKETCONNECTCLIENT(tcpTcpCommand,server_ip_address$,SERVERPORT,0);	
+		IF(giDebug=1) {	TRACE ("Starting tcpTcpCommand on queue add. lsiStatus=%d\r",lsiStatus);	}
+    }
+}
+
+FUNCTION tcpQueueInsert(STRING lsCommand$){
+	SIGNED_INTEGER lsiStatus;
+
+	giQueueIndex = giQueueIndex + 1;
+	IF(giQueueIndex > 15) {
+		ClearTcpQueue();
+	}
+    MAKESTRING(tcpQueue[giQueueIndex].queueCommand$,"GET /%s HTTP/1.1\x0D\x0A\x0D\x0A",lsCommand$);
+	IF (giDebug=1) {	TRACE("Command %d Inserted: %s\r",giQueueIndex,lsCommand$);	}
+	lsiStatus = gitcpTcpCommandStatus;                            
+	IF(giSemaphore = 0 && (lsiStatus = 0 || lsiStatus=3 || lsiStatus=4 || lsiStatus=5 || lsiStatus=7 || lsiStatus=8)){
+		IF(giDebug=1) {	TRACE ("Calling connectSocket function from tcpQueueInsert\r");	}
+		connectSocket();
+    }	
+}
+
+FUNCTION processValidResponse(STRING lsValidResponse$) {
+	INTEGER liCountTagLines;																//counter for loop control and pointer to structure
+    INTEGER liCounter;																		//general purpose loop counter
+    INTEGER liFav;																			//loop counter to handle preset variable storage
+    INTEGER liDuration,liParentalControlMode,liOffAir,liIsPpv,liIsRecording,liIsVod;		//local variables for temporary storage of values
+    STRING lsMajorChannelNumber$[5],lsMinorChannelNumber$[5];
+    STRING lsCallSign$[8],lsTitle$[256],lsAirDate$[32],lsRating$[24];						//local variables for temporary storage of values
+    STRING lsTemp$[256],lsLocations$[256],lsLocationName$[128],lsLocationAddress$[128];
+    STRING lsAccessCardId$[16],lsReceiverId$[16],lsReceiverSoftwareVersion$[16],lsShefVersion$[16];
+	STRING lsMusicArtist$[128],lsMusicCD$[128],lsMusicTitle$[128];
+    
+	INTEGER liSubTagStartPos;																//pointer to the start of a set of sub-tags in a tag
+	INTEGER liSubTagEndPos;																	//pointer to the end of a set of sub-tags in a tag
+	INTEGER liInfoType;
+	STRING lsJunk$[256];																	//stuff we don't need
+	STRING lsSubTag$[1024];
+	STRING lsTagLine$[64][256];																//array to hold values for one response
+    
+    liCountTagLines = 0;																	//make sure we start at the beginning
+	liInfoType = 0;   
+
+    lsValidResponse$ = LEFT(lsValidResponse$,LEN(lsValidResponse$)-1);						//remove final end tag
+
+	WHILE(FIND(TAG_DELIMETER,lsValidResponse$))  {											//as long as the tag delimeter is found in the string
+		liCountTagLines = liCountTagLines +1;												//advance the loop counter
+		lsTagLine$[liCountTagLines] = REMOVE(TAG_DELIMETER,lsValidResponse$);				//remove a tag line using the delimeter
+		
+		IF(FIND("{",lsTagLine$[liCountTagLines])) {											//if we find the start of a subtag in this line
+			//store the line in the array, adding the whole of the sub-tag. this is needed because the sub-tag contains the same delimeter
+			//as the main tags
+			lsTagLine$[liCountTagLines] = lsTagLine$[liCountTagLines] + REMOVE("}",lsValidResponse$);	
+			IF(LEFT(lsValidResponse$,1) = TAG_DELIMETER) {									//because of certain formatting, an extra delimeter is left
+				lsJunk$ = REMOVE(TAG_DELIMETER,lsValidResponse$);							//get rid of the extra delimeter
+			}
+		}
+		//IF (giDebug=1) {TRACE("DTV IP:TagLine%d=%s",liCountTagLines,lsTagLine$[liCountTagLines]);}			//debug
+	}
+	IF(LEN(lsValidResponse$) > 5) {
+		liCountTagLines = liCountTagLines +1;												//add one to counter since we're out of the loop
+		lsTagLine$[liCountTagLines] = lsValidResponse$;										//the remaining string is possibly a last tag
+	}
+	//now store tag elements into structure
+	FOR(liCounter = 1 TO liCountTagLines) {													//loop through the number of tag lines we found
+		//remove the tag and it's delimeters so we have just the tag string. store the tags in the structure
+		lsJunk$ = REMOVE("\x22",lsTagLine$[liCounter]);
+		structureTagTable[liCounter].tag$ = REMOVE("\x22",lsTagLine$[liCounter]);
+		structureTagTable[liCounter].tag$ = LEFT(structureTagTable[liCounter].tag$,LEN(structureTagTable[liCounter].tag$)-1);
+		
+		//remove the tag values and delimeters if there are any delimeters. store the tag values in the structure
+		structureTagTable[liCounter].tagValue$ = lsTagLine$[liCounter];
+		lsJunk$ = REMOVE("\x3A\x20",structureTagTable[liCounter].tagValue$);
+		IF(LEFT(structureTagTable[liCounter].tagValue$,1) != "{") {
+			structureTagTable[liCounter].tagValue$ = LEFT(structureTagTable[liCounter].tagValue$,LEN(structureTagTable[liCounter].tagValue$)-1);
+		}
+		IF(LEFT(structureTagTable[liCounter].tagValue$,1) = "\x22") {
+			structureTagTable[liCounter].tagValue$ = MID(structureTagTable[liCounter].tagValue$,2,LEN(structureTagTable[liCounter].tagValue$)-2);
+			IF(RIGHT(structureTagTable[liCounter].tagValue$,1) = "\x22") {
+				structureTagTable[liCounter].tagValue$ = LEFT(structureTagTable[liCounter].tagValue$,LEN(structureTagTable[liCounter].tagValue$)-1);
+			}
+		}
+//		IF (giDebug=1) {TRACE("Tag%d=%s--Value=%s",liCounter,structureTagTable[liCounter].tag$,structureTagTable[liCounter].tagValue$);}
+	}
+
+
+	FOR(liCounter = 1 TO liCountTagLines) {														//iterates through tags and values from the current query and assigns them to temp storage
+//		IF (giDebug=1) {TRACE("Processing tag%d <%s> <%s>",liCounter,structureTagTable[liCounter].tag$,structureTagTable[liCounter].tagValue$);}
+		IF(structureTagTable[liCounter].tag$ = "callsign") {
+	    	lsCallSign$ = structureTagTable[liCounter].tagValue$;
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "major") {
+	    	lsMajorChannelNumber$ = structureTagTable[liCounter].tagValue$;
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "minor") {
+			lsMinorChannelNumber$ = structureTagTable[liCounter].tagValue$;
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "date") {
+	    	lsAirDate$ = structureTagTable[liCounter].tagValue$;
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "duration") {
+	    	liDuration = ATOI(structureTagTable[liCounter].tagValue$);
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "rating") {
+	    	lsRating$ = structureTagTable[liCounter].tagValue$;
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "title") {
+	    	lsTitle$ = structureTagTable[liCounter].tagValue$;
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "isPclocked") {
+	    	liParentalControlMode = ATOI(structureTagTable[liCounter].tagValue$);
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "isOffAir") {
+			IF(structureTagTable[liCounter].tagValue$ = "false") { 
+	    		liOffAir = 0;
+	    	}
+			ELSE IF(structureTagTable[liCounter].tagValue$ = "true") { 
+	    		liOffAir = 1;
+	    	}
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "isPpv") {
+			IF(structureTagTable[liCounter].tagValue$ = "false") { 
+	    		liIsPpv = 0;
+	    	}
+			ELSE IF(structureTagTable[liCounter].tagValue$ = "true") { 
+	    		liIsPpv = 1;
+	    	}
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "isRecording") {
+			IF(structureTagTable[liCounter].tagValue$ = "false") { 
+	    		liIsRecording = 0;
+	    	}
+			ELSE IF(structureTagTable[liCounter].tagValue$ = "true") { 
+	    		liIsRecording = 1;
+	    	}
+		}
+		ELSE IF(structureTagTable[liCounter].tag$ = "isVod") {
+			IF(structureTagTable[liCounter].tagValue$ = "false") { 
+	    		liIsVod = 0;
+	    	}
+			ELSE IF(structureTagTable[liCounter].tagValue$ = "true") { 
+	    		liIsVod = 1;
+	    	}
+		}
+
+
+// V1.2 CMR Added music parcing 
+
+/*"music": {
+    "by": "Peter Kater",
+    "cd": "CD: Elements Series: Earth ",
+    "title": "Summer Prelude"
+  }
+*/
+        ELSE IF(structureTagTable[liCounter].tag$ = "music") {
+        	lsTemp$ = REMOVE("by\x22:\x20\x22",structureTagTable[liCounter].tagValue$);
+			lsMusicArtist$ = REMOVE("\x22",structureTagTable[liCounter].tagValue$);
+        	lsMusicArtist$ = LEFT(lsMusicArtist$,LEN(lsMusicArtist$)-1);
+        	lsTemp$ = REMOVE("cd\x22:\x20\x22",structureTagTable[liCounter].tagValue$);
+			lsMusicCD$ = REMOVE("\x22",structureTagTable[liCounter].tagValue$);
+        	lsMusicCD$ = LEFT(lsMusicCD$,LEN(lsMusicCD$)-1);
+        	lsTemp$ = REMOVE("title\x22:\x20\x22",structureTagTable[liCounter].tagValue$);
+			lsMusicTitle$ = REMOVE("\x22",structureTagTable[liCounter].tagValue$);
+        	lsMusicTitle$ = LEFT(lsMusicTitle$,LEN(lsMusicTitle$)-1);
+			IF (giDebug=1) {TRACE("Found Music Tags Artist=|%s|CD=|%s|Title=|%s|\r",lsMusicArtist$,lsMusicCD$,lsMusicTitle$);}
+		}
+        ELSE IF(structureTagTable[liCounter].tag$ = "locations") {
+        	lsTemp$ = REMOVE("clientAddr\x22:\x20\x22",structureTagTable[liCounter].tagValue$);
+        	lsLocationAddress$ = REMOVE("\x22",structureTagTable[liCounter].tagValue$);
+        	lsLocationAddress$ = LEFT(lsLocationAddress$,LEN(lsLocationAddress$)-1);
+        	lsTemp$ = REMOVE("locationName\x22:\x20\x22",structureTagTable[liCounter].tagValue$);
+        	lsLocationName$ = REMOVE("\x22",structureTagTable[liCounter].tagValue$);
+        	lsLocationName$ = LEFT(lsLocationName$,LEN(lsLocationName$)-1);
+        	PRINT("Locations query result: %s::%s\r",lsLocationAddress$,lsLocationName$);
+        }
+        ELSE IF(structureTagTable[liCounter].tag$ = "clientAddr") {
+        	lsLocationAddress$ = REMOVE("\x22",structureTagTable[liCounter].tagValue$);
+        	lsLocationAddress$ = LEFT(lsLocationAddress$,LEN(lsLocationAddress$)-1);
+        	lsTemp$ = REMOVE("locationName\x22:\x20\x22",structureTagTable[liCounter].tagValue$);
+        	lsLocationName$ = REMOVE("\x22",structureTagTable[liCounter].tagValue$);
+        	lsLocationName$ = LEFT(lsLocationName$,LEN(lsLocationName$)-1);
+        	GENERATEUSERNOTICE("Locations query result: %s::%s\r",lsLocationAddress$,lsLocationName$);
+        }
+        ELSE IF(structureTagTable[liCounter].tag$ = "accessCardId") {
+        	lsAccessCardId$ = structureTagTable[liCounter].tagValue$;
+        	IF (giDebug=1) {TRACE("Accesscardid=%s\r",lsAccessCardId$);}
+        }
+        ELSE IF(structureTagTable[liCounter].tag$ = "receiverId") {
+        	lsReceiverId$ = structureTagTable[liCounter].tagValue$;
+        }
+        ELSE IF(structureTagTable[liCounter].tag$ = "stbSoftwareVersion") {
+        	lsReceiverSoftwareVersion$ = structureTagTable[liCounter].tagValue$;
+        }
+        ELSE IF(structureTagTable[liCounter].tag$ = "version") {
+        	lsShefVersion$ = structureTagTable[liCounter].tagValue$;
+        }
+        ELSE IF(structureTagTable[liCounter].tag$ = "mode") {
+        	power_mode = ATOI(structureTagTable[liCounter].tagValue$);
+        }
+        ELSE IF(structureTagTable[liCounter].tag$ = "status") {
+        	IF(FIND("getProgInfo",structureTagTable[liCounter].tagValue$)) {
+        		liInfoType = 31;
+        	}
+        	ELSE IF(FIND("getTuned",structureTagTable[liCounter].tagValue$)) {
+        		liInfoType = 30;
+        	}
+        	ELSE IF(FIND("/info/mode",structureTagTable[liCounter].tagValue$)) {
+        		liInfoType = 32;
+        	}
+        	ELSE IF(FIND("/info/getVersion",structureTagTable[liCounter].tagValue$)) {
+        		liInfoType = 32;
+        	}
+			IF (giDebug=1) {TRACE("InfoType flag=%d\r",liInfoType);}
+        }
+	}
+	IF (giDebug=1) {TRACE("Done processing tags\r");}
+	IF(liInfoType = 30) {
+		IF (giDebug=1) {TRACE("Setting now playing outputs\r");}
+	   	call_sign$   = lsCallSign$;
+	   	rating$      = lsRating$;
+	   	title$       = lsTitle$;
+	   	air_date$    = lsAirDate$;
+	   	duration     = liDuration;
+	   	parental_control_mode = liParentalControlMode;
+	   	off_air      = liOffAir;
+	   	is_ppv       = liIsPpv;
+	   	is_recording = liIsRecording;
+	   	is_vod       = liIsVod;
+		music_station_artist$ = lsMusicArtist$;
+		music_station_cd$  = lsMusicCD$;
+		music_station_title$ = lsMusicTitle$;
+	   	major_channel_number = ATOI(lsMajorChannelNumber$);
+	    IF(lsMinorChannelNumber$ = "65535") {
+	    	minor_channel_number = 0;
+   			MAKESTRING(channel$,"%s",lsMajorChannelNumber$);
+	    }
+	    ELSE {
+    		minor_channel_number = ATOI(lsMinorChannelNumber$);
+   			MAKESTRING(channel$,"%s-%s",lsMajorChannelNumber$,lsMinorChannelNumber$);
+   		}
+   	} 
+	ELSE IF(liInfoType = 31) {
+		IF (giDebug=1) {TRACE("Setting other channel now playing outputs\r");}
+	   	other_call_sign$   = lsCallSign$;
+	   	other_rating$      = lsRating$;
+	   	other_title$       = lsTitle$;
+	   	other_air_date$    = lsAirDate$;
+	   	other_duration     = liDuration;
+	   	other_parental_control_mode = liParentalControlMode;
+	   	other_off_air      = liOffAir;
+	   	other_is_ppv       = liIsPpv;
+	   	other_is_recording = liIsRecording;
+	   	other_is_vod       = liIsVod;
+		other_major_channel_number = ATOI(lsMajorChannelNumber$);
+	    IF(lsMinorChannelNumber$ = "65535") {
+	    	minor_channel_number = 0;
+   			MAKESTRING(other_channel$,"%s",lsMajorChannelNumber$);
+	    }
+	    ELSE {
+    		minor_channel_number = ATOI(lsMinorChannelNumber$);
+   			MAKESTRING(other_channel$,"%s-%s",lsMajorChannelNumber$,lsMinorChannelNumber$);
+   		}
+   	}
+   	ELSE IF(liInfoType = 32) {
+		IF (giDebug=1) {TRACE("Info outputs\r");}
+	    access_card_id$				= lsAccessCardId$;
+	    receiver_id$				= lsReceiverId$;
+	    receiver_software_version$	= lsReceiverSoftwareVersion$;
+	    shef_version$				= lsShefVersion$;
+	    polling_busy = 0;
+	}
+}
+
+/*******************************************************************************************
+  Event Handlers
+*******************************************************************************************/
+PUSH enable_debug		{	giDebug = 1;	}
+RELEASE enable_debug	{	giDebug = 0;	}
+
+//SOCKETS
+
+SOCKETCONNECT tcpTcpCommand {
+	INTEGER i;
+	INTEGER liQueueIndex;
+	STRING lsSocketCommand$[255];
+
+    IF(giQueueIndex > 0) {
+		liQueueIndex = giQueueIndex;
+    	MAKESTRING(lsSocketCommand$,"%s",tcpQueue[1].queueCommand$);
+	   	SOCKETSEND(tcpTcpCommand,lsSocketCommand$);
+		IF(giDebug=1)	{TRACE("tcpTcpCommand Connected:Sending command:%s\r",tcpQueue[1].queueCommand$);	}	   	
+	   	IF(giDebug=1)	{TRACE("tcpTcpCommand Connected: liQueueIndex=%d\r",liQueueIndex);	}
+		FOR(i = 1 TO liQueueIndex-1) {	   		
+	   		IF(giDebug=1)	{TRACE("tcpTcpCommand Connected Inside FOR: Local Index=%d | giQueueIndex=%d\r",i,liQueueIndex);	}
+			tcpQueue[i].queueCommand$ = tcpQueue[i+1].queueCommand$;
+			IF(giDebug=1)	{TRACE("tcpTcpCommand Connected: queue %d=%s\r",i,tcpQueue[i].queueCommand$);	}
+	   	}
+		IF(giDebug=1)	{TRACE("tcpTcpCommand Connected: Clearing queue position %d\r",liQueueIndex);	}
+	   	tcpQueue[liQueueIndex].queueCommand$ = "";
+	   	IF(liQueueIndex >= 1) {
+	   		liQueueIndex = liQueueIndex - 1;
+	   	}
+		IF(giDebug=1)	{TRACE("tcpTcpCommand Connected: %d remaining commands in queue\r",liQueueIndex);	}
+		giQueueIndex = liQueueIndex;
+	}
+}
+SOCKETRECEIVE tcpTcpCommand {																		//we're getting something
+	STRING lsRx$[65534];																		//local string for storing input. eliminates a moving target of input
+	STRING lsJunk$[32000];																		//local string used for storing stuff we really don't want
+	
+//	IF(giDebug=1)	{TRACE("tcpTcpCommand Receive:%s\r",lsRx$);	}
+	IF(!FIND("200 OK",tcpTcpCommand.SOCKETRXBUF)) {
+		IF(giDebug=1)	{TRACE("tcpTcpCommand Receive:Received Partial or Error Message:%s\r",tcpTcpCommand.SOCKETRXBUF);	}
+	}
+	ELSE IF(FIND("200 OK",tcpTcpCommand.SOCKETRXBUF)){
+		WHILE(FIND("200 OK",tcpTcpCommand.SOCKETRXBUF)) {											//if we find the start of a valid response
+			IF(giDebug=1)	{TRACE("tcpTcpCommand Receive:WHILE:%s\r",tcpTcpCommand.SOCKETRXBUF);	}
+			lsRx$ = GATHER("\x0A}",tcpTcpCommand.SOCKETRXBUF,500);									//store the input in the local string, adding to buffer until it's complete
+			lsJunk$ = REMOVE("{",lsRx$);
+		}
+		processValidResponse(lsRx$);																//go parse the valid response
+		IF(giDebug=1) {	TRACE ("SOCKETRECEIVE received all data.\r");	}			//removes response header junk. valid data starts with "{\x0A"
+	}
+	CLEARBUFFER(tcpTcpCommand.SOCKETRXBUF);														//clear the buffer so we don't overrun
+}
+
+SOCKETDISCONNECT tcpTcpCommand {
+	SIGNED_INTEGER lsiStatus;
+
+	IF(giDebug=1) { TRACE("SOCKETDISCONNECT. Queue count =%d.\r",giQueueIndex);	}
+	IF(giQueueIndex > 0) {
+		IF(giSemaphore = 0 && (lsiStatus = 0 || lsiStatus=3 || lsiStatus=4 || lsiStatus=5 || lsiStatus=7 || lsiStatus=8)){
+			IF(giDebug=1) {	TRACE ("Calling connectSocket function from SOCKETDISCONNECT\r");	}
+			connectSocket();
+	    }	
+	}
+}
+SOCKETSTATUS tcpTcpCommand {
+	INTEGER i; //counter
+
+	gitcpTcpCommandStatus = SOCKETGETSTATUS();
+	tcp_socket_status = gitcpTcpCommandStatus;
+	SWITCH (gitcpTcpCommandStatus) {
+    	CASE (0): 	giSemaphore = 0;
+		CASE (3):{
+ 					giSemaphore = 0;
+					SOCKETDISCONNECTCLIENT(tcpTcpCommand);
+					IF(giDebug=1) { TRACE("Connection timed out. Setting Queue count to 0.\r");	}
+					FOR(i = 0 TO 15) {	tcpQueue[i].queueCommand$ = "";	}
+					giQueueIndex = 0;
+				}
+		CASE (4): 	giSemaphore = 0;
+		CASE (5):	giSemaphore = 0;
+		CASE (7): 	giSemaphore = 0;
+	}
+	IF(giDebug=1) {																			
+		SWITCH(gitcpTcpCommandStatus){
+        	CASE (0):{TRACE ("tcpTcpCommand connection Not Connected:%d\r",gitcpTcpCommandStatus);}
+			CASE (1):{TRACE ("tcpTcpCommand Waiting for Connection:%d\r",gitcpTcpCommandStatus);}
+			CASE (2):{TRACE ("tcpTcpCommand Connected:%d\r",gitcpTcpCommandStatus);}
+			CASE (3):{TRACE ("tcpTcpCommand Connection Failed:%d\r",gitcpTcpCommandStatus);}
+			CASE (4):{TRACE ("tcpTcpCommand Connection Broken Remotely:%d\r",gitcpTcpCommandStatus);}
+			CASE (5):{TRACE ("tcpTcpCommand Connection Broken Locally:%d\r",gitcpTcpCommandStatus);}
+			CASE (6):{TRACE ("tcpTcpCommand Performing DNS Resolution:%d\r",gitcpTcpCommandStatus);}
+			CASE (7):{TRACE ("tcpTcpCommand DNS Resolution Failure:%d\r",gitcpTcpCommandStatus);}
+			CASE (8):{TRACE ("tcpTcpCommand DNS Resolved:%d\r",gitcpTcpCommandStatus);}
+			CASE (-1):{TRACE ("tcpTcpCommand Client, Server or UDP variable not a TCP/IP or UDP variable:%d\r",gitcpTcpCommandStatus);}
+			CASE (-2):{TRACE ("tcpTcpCommand Could not create the connection task:%d\r",gitcpTcpCommandStatus);}
+			CASE (-3):{TRACE ("tcpTcpCommand Could not resolve address:%d\r",gitcpTcpCommandStatus);}
+			CASE (-4):{TRACE ("tcpTcpCommand Port not in range:%d\r",gitcpTcpCommandStatus);}
+			CASE (-5):{TRACE ("tcpTcpCommand Not Connected:%d\r",gitcpTcpCommandStatus);}
+			CASE (-6):{TRACE ("tcpTcpCommand Not enough room in string parameter to hold IP address:%d\r",gitcpTcpCommandStatus);}
+			CASE (-7):{TRACE ("tcpTcpCommand Already Connected:%d\r",gitcpTcpCommandStatus);}
+			CASE (-8):{TRACE ("tcpTcpCommand Client Trying to connect a client that is already attempting a connection:%d\r",gitcpTcpCommandStatus);}
+			CASE (-9):{TRACE ("tcpTcpCommand Client Trying to connect but ethernet is not fully initialized:%d\r",gitcpTcpCommandStatus);} 
+		}
+	}
+}
+//END SOCKETS
+
+CHANGE command$ {
+	STRING lsCommand$[256];
+	//TRACE("Received command from .umc. Going to call send function\r");						//debug
+	IF(command$ = "tv/getTuned") {
+		MAKESTRING(lsCommand$,"%s?clientAddr=%s",command$,client_address$);
+	}
+	ELSE IF(command$ = "info/getVersion" || command$ = "info/getLocations") {
+		MAKESTRING(lsCommand$,"%s",command$);
+	}
+	
+	ELSE {
+		MAKESTRING(lsCommand$,"%s?clientAddr=%s",command$,client_address$);
+	}
+	tcpQueueInsert(lsCommand$);
+																			//send the command text to the tcp-ip send function
+}
+
+CHANGE tune_channel$ {																			//the channel input serial
+	STRING lsTuneCommand$[128];																//local string to form full tune command
+	STRING lsMajorChannel$[8];																//local string to hold major channel number
+	STRING lsMinorChannel$[8];																//local string to hold minor channel number
+    
+	IF(FIND("\x2D",tune_channel$)) {
+		lsMajorChannel$ = REMOVE("\x2D",tune_channel$);
+		lsMajorChannel$ = LEFT(lsMajorChannel$,LEN(lsMajorChannel$)-1);
+		lsMinorChannel$ = tune_channel$;
+	}
+	ELSE {
+		lsMajorChannel$ = tune_channel$;
+		lsMinorChannel$ = "65535";
+	}
+	MAKESTRING(lsTuneCommand$,"tv/tune?major=%s&minor=%s&clientAddr=%s",lsMajorChannel$,lsMinorChannel$,client_address$);	//form one command string
+	tcpQueueInsert(lsTuneCommand$);
+																			//send the tune channel command
+}
+CHANGE tune_channel {
+	STRING lsTuneCommand$[128];																//local string to form full tune command
+
+	MAKESTRING(lsTuneCommand$,"tv/tune?major=%d&minor=65535&clientAddr=%s",tune_channel,client_address$);	//form one command string
+	tcpQueueInsert(lsTuneCommand$);
+																			//send the tune channel command
+}
+CHANGE info_channel$ {																		//get program info on this channel
+	STRING lsTuneCommand$[128];																//local string to form full tune command
+	STRING lsMajorChannel$[8];																//local string to hold major channel number
+	STRING lsMinorChannel$[8];																//local string to hold minor channel number
+    
+	IF(FIND("\x2D",info_channel$)) {
+		lsMajorChannel$ = REMOVE("\x2D",info_channel$);
+		lsMajorChannel$ = LEFT(lsMajorChannel$,LEN(lsMajorChannel$)-1);
+		lsMinorChannel$ = info_channel$;
+	}
+	ELSE {
+		lsMajorChannel$ = info_channel$;
+		lsMinorChannel$ = "65535";
+	}
+	MAKESTRING(lsTuneCommand$,"tv/getProgInfo?major=%s&minor=%s&clientAddr=%s",lsMajorChannel$,lsMinorChannel$,client_address$);	//form one command string
+	tcpQueueInsert(lsTuneCommand$);
+																			//send the tune channel command
+}
+
+CHANGE remote_key$ {
+	STRING lsKeyCommand$[256];
+	
+	IF (giDebug=1) {TRACE("Received key command from .umc. Going to call send function");}					//debug
+	MAKESTRING(lsKeyCommand$,"remote/processKey?key=%s&clientAddr=%s",remote_key$,client_address$);			//form one command string
+	tcpQueueInsert(lsKeyCommand$);
+																			//send the tune channel command
+}
+
+PUSH tcp_waiting_timeout{
+	IF(giDebug=1)	{TRACE("TCP/IP waiting timeout pressed\n");	}
+	SOCKETDISCONNECTCLIENT (tcpTcpCommand);
+	IF(giDebug=1)	{TRACE("TCP/IP Socket Disconnected\n");	}
+	CLEARBUFFER(tcpTcpCommand.SOCKETRXBUF);
+	IF(giDebug=1)	{TRACE("TCP/IP Buffer Clear\n");	}
+	ClearTcpQueue();
+	giSemaphore = 0;		//v1.1
+	gitcpTcpCommandStatus = 0; //v1.1
+	IF(giDebug=1)	{TRACE("Waiting Timeout giSemaphore initialized to 0. giSemaphore = %d\n", giSemaphore);	} //v1.1
+	IF(giDebug=1)	{TRACE("Waiting Timeout gitcpTcpCommandStatus initialized to 0. gitcpTcpCommandStatus = %d\n", gitcpTcpCommandStatus);	}//v1.1	
+	IF (enable_timeout_logs=1) {GENERATEUSERNOTICE("ControlWorks DIRECTV IP Engine could not connect to server. Connection timedout.\n");}
+}
+
+
+PUSH tcp_connected_timeout{
+	IF(giDebug=1)	{TRACE("TCP/IP connected timeout pressed\n");	}
+	SOCKETDISCONNECTCLIENT (tcpTcpCommand);
+	IF(giDebug=1)	{TRACE("TCP/IP Socket Disconnected\n");	}
+	CLEARBUFFER(tcpTcpCommand.SOCKETRXBUF);
+	IF(giDebug=1)	{TRACE("TCP/IP Buffer Clear\n");	}
+	ClearTcpQueue();
+	giSemaphore = 0;	//v1.1
+	gitcpTcpCommandStatus = 0;	//v1.1
+	IF(giDebug=1)	{TRACE("Connected Timeout giSemaphore initialized to 0. giSemaphore = %d\n", giSemaphore);	}	//v1.1
+	IF(giDebug=1)	{TRACE("Connected Timeout gitcpTcpCommandStatus initialized to 0. gitcpTcpCommandStatus = %d\n", gitcpTcpCommandStatus);	}	//v1.1	
+	IF (enable_timeout_logs=1) {GENERATEUSERNOTICE("ControlWorks DIRECTV IP Engine did not receive data from server. Connection timedout.\n");}
+}
+
+
+/*******************************************************************************************
+  Main()
+*******************************************************************************************/
+
+FUNCTION main(){
+	WAITFORINITIALIZATIONCOMPLETE();
+	giSemaphore = 0;
+	polling_busy = 0;
+	gsSymbolName$ = GETSYMBOLINSTANCENAME();
+	ClearTcpQueue();
+	PRINT ("DIRECTV IP Engine (ControlWorks) - Copyright (C) 2015 ControlWorks Consulting, LLC All Rights Reserved - Use subject to license.\n");
+}

@@ -1,0 +1,82 @@
+[BEGIN]
+  Version=1
+[END]
+[BEGIN]
+  ObjTp=FSgntr
+  Sgntr=UserSPlus
+  RelVrs=1
+  IntStrVrs=1
+  SPlusVrs=4.02.15
+  CrossCplrVrs=1.3
+[END]
+[BEGIN]
+  ObjTp=Symbol
+  Exclusions=1,19,20,21,88,89,167,168,179,213,214,215,216,217,225,226,248,249,266,267,310,718,756,854,
+  Exclusions_CDS=5
+  Inclusions_CDS=6
+  Name=Autonomic MMS Keyboard Controller 3.0
+  SmplCName=Autonomic MMS Keyboard Controller v3.0.usp
+  Code=1
+  SysRev5=4.000
+  SMWRev=2.02.05
+  InputCue1=shift
+  InputSigType1=Digital
+  InputCue2=backspace
+  InputSigType2=Digital
+  InputCue3=reset
+  InputSigType3=Digital
+  InputCue4=enter
+  InputSigType4=Digital
+  InputCue5=kb[#]
+  InputSigType5=Digital
+  InputList2Cue1=default_text
+  InputList2SigType1=Serial
+  OutputList2Cue1=caps
+  OutputList2SigType1=Analog
+  OutputList2Cue2=display
+  OutputList2SigType2=Serial
+  OutputList2Cue3=output
+  OutputList2SigType3=Serial
+  ParamCue1=[Reference Name]
+  MinVariableInputs=42
+  MaxVariableInputs=42
+  MinVariableInputsList2=1
+  MaxVariableInputsList2=1
+  MinVariableOutputs=0
+  MaxVariableOutputs=0
+  MinVariableOutputsList2=3
+  MaxVariableOutputsList2=3
+  MinVariableParams=0
+  MaxVariableParams=0
+  Expand=expand_separately
+  Expand2=expand_separately
+  ProgramTree=Logic
+  SymbolTree=32
+  Hint=
+  PdfHelp=
+  HelpID= 
+  Render=4
+  Smpl-C=16
+  CompilerCode=-48
+  CompilerParamCode=27
+  CompilerParamCode5=14
+  NumFixedParams=1
+  Pp1=1
+  MPp=1
+  NVStorage=10
+  ParamSigType1=String
+  SmplCInputCue1=o#
+  SmplCOutputCue1=i#
+  SmplCInputList2Cue1=an#
+  SmplCOutputList2Cue1=ai#
+  SPlus2CompiledName=S2_Autonomic_MMS_Keyboard_Controller_v3_0
+  SymJam=NonExclusive
+  FileName=Autonomic MMS Keyboard Controller v3.0.ush
+  SIMPLPlusModuleEncoding=0
+[END]
+[BEGIN]
+  ObjTp=Dp
+  H=1
+  Tp=1
+  NoS=False
+[END]

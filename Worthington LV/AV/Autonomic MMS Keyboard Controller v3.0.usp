@@ -1,0 +1,163 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+*******************************************************************************************/
+/*
+Publisher Name:		Autonomic Controls, Inc.
+System Name:   		Keyboard Module for MCS Server
+System Number: 		3.0
+Programmer:    		MJD
+Comments:      
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+*******************************************************************************************/
+#DEFAULT_NONVOLATILE
+#SYMBOL_NAME "Autonomic MMS Keyboard Controller 3.0"
+#ENABLE_STACK_CHECKING
+              
+
+/*
+#HELP_BEGIN
+Autonomic Controls Keyboard Module for MCS.
+
+Inputs: 
+
+0-9, A-Z, Comma, Period, Quote - Keystrokes from the user interface.
+Shift - shifts key.
+Space - Space key.                              
+Backspace - Backspace key.  Clears one character from the buffer.
+Enter - Outputs string and clears input buffer when pulsed.
+Cancel - Clears input butter when pulsed.  
+
+Outputs:
+
+Display - Outputs string in realtime as keyboard entry is made.
+Output - When Enter input is received, characters in PREPEND parameter, the input string, and characters in APPEND parameter are output.
+
+#HELP_END
+*/
+
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+*******************************************************************************************/
+digital_input shift;
+digital_input backspace;
+digital_input reset;
+digital_input enter;
+digital_input kb[38,38]; 
+
+string_input default_text[256];
+
+analog_output caps;
+string_output display;
+string_output output;
+
+/*******************************************************************************************
+  Global Variables
+*******************************************************************************************/
+
+string buffer[256];            
+
+/*******************************************************************************************
+  Functions
+*******************************************************************************************/
+function updateDisplay()
+{
+	display = buffer;
+}
+
+/*******************************************************************************************
+  Event Handlers
+*******************************************************************************************/
+push kb
+{
+	integer index;
+	integer char;
+	
+	index = getlastmodifiedarrayindex();      
+		
+	if (len(buffer) < 256)
+	{
+		if (index = 37) //space
+		{
+			char = 32;
+		}
+		else if (index = 38) //period.
+		{
+			char = 46;
+		}                     
+		else if (index <= 10) //numbers
+		{
+			if (caps = 0)
+			{
+				char = index + 47;
+			}
+			else
+			{
+				switch(index)
+				{
+					case (1):	char = 41;
+					case (2):	char = 33;
+					case (3):	char = 64;
+					case (4):	char = 35;
+					case (5):	char = 36;
+					case (6):	char = 37;
+					case (7):	char = 94;
+					case (8):	char = 38;
+					case (9):	char = 42;
+					case (10):	char = 40;
+				}
+			}
+		}
+		else
+		{
+			char = (index + 54) + (abs(caps=0) * 32);
+		}
+	
+	
+	buffer = buffer + chr(char); 
+	updateDisplay();                 
+	caps=0;
+	}				
+}
+
+push shift
+{         
+	if (caps = 0) caps = 1; else caps = 0;
+}      
+
+push backspace
+{
+	buffer = left(buffer,len(buffer)-1);
+	updateDisplay();
+}
+
+push reset
+{
+	buffer = "";
+	updateDisplay();  
+	output = "KBCANCEL";
+}
+
+push enter
+{
+	output = "KB " + buffer;   
+	buffer = "";
+	updateDisplay();
+}         
+
+change default_text
+{
+	buffer = left(default_text,255);      
+	print ("buffer = %s",buffer);        
+	updateDisplay();
+}
+
+/*******************************************************************************************
+  Main()
+*******************************************************************************************/
+function main()
+{         
+
+}

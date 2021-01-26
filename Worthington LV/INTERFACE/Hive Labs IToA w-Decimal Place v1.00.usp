@@ -1,0 +1,30 @@
+#CATEGORY "46" "Hive Labs Inc" // Custom
+
+
+
+#define_constant MAX_IO 8
+
+analog_input 	decimal_place,
+				in[ MAX_IO ];
+				
+string_output 	_skip_,
+				out[ MAX_IO ];
+
+
+change in
+{
+	integer i;
+	string s[ 255 ];
+	
+	
+	i = getlastmodifiedarrayindex( );
+
+	s = itoa( in[ i ] );
+	
+	if( decimal_place )
+	{
+		makestring( s, "%s.%s", left( s, len( s ) - decimal_place ), right( s, decimal_place ) );
+	}
+	
+	out[ i ] = s;
+}

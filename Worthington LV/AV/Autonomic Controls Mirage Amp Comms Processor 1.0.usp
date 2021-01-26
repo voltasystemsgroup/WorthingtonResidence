@@ -1,0 +1,1039 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+  (Fill in comments below)
+*******************************************************************************************/
+/*
+Dealer Name: Autonomic Controls, Inc
+System Name:
+System Number:
+Programmer: Jonathan Simon
+Comments:
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+  (Uncomment and declare compiler directives as needed)
+*******************************************************************************************/
+// #ENABLE_DYNAMIC
+#SYMBOL_NAME "Autonomic Controls Mirage Amp Comms Processor"
+// #HINT ""
+// #DEFINE_CONSTANT
+#CATEGORY "8" 
+#PRINT_TO_TRACE
+// #DIGITAL_EXPAND 
+// #ANALOG_SERIAL_EXPAND 
+// #OUTPUT_SHIFT 
+// #HELP_PDF_FILE ""
+#DEFAULT_VOLATILE
+#ENABLE_STACK_CHECKING
+#ENABLE_TRACE
+#ENCODING_ASCII
+// #ENCODING_UTF16
+// #ENCODING_INHERIT_FROM_PARENT
+// #ENCODING_INHERIT_FROM_PROGRAM
+/*
+#HELP_BEGIN
+   (add additional lines of help lines)
+#HELP_END
+*/
+
+/*******************************************************************************************
+  Include Libraries
+  (Uncomment and include additional libraries as needed)
+*******************************************************************************************/
+// #CRESTRON_LIBRARY ""
+// #USER_LIBRARY ""
+
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+  (Uncomment and declare inputs and outputs as needed)
+*******************************************************************************************/
+BUFFER_INPUT RX$[16384];
+STRING_INPUT Set_Metadata1$[8][100],Set_Metadata2$[8][100],Set_Metadata3$[8][100],Set_Metadata4$[8][100];
+
+DIGITAL_INPUT  debug_enabled, Initialize, All_On,All_Off;
+DIGITAL_INPUT  All_Zones_To_Source[8];
+DIGITAL_INPUT Power_on[96], Power_off[96], Power_toggle[96];
+DIGITAL_INPUT Mute_on[96], Mute_off[96], Mute_toggle[96];
+DIGITAL_INPUT Volume_up[96], Volume_down[96,96];
+
+ANALOG_INPUT Set_volume[96],Set_bass[96],Set_treble[96],Set_balance[96],Set_source[96,96];
+
+
+
+// DIGITAL_INPUT 
+// ANALOG_INPUT 
+// STRING_INPUT 
+// BUFFER_INPUT 
+
+STRING_OUTPUT TX$;
+STRING_OUTPUT Metadata1$[8],Metadata2$[8],Metadata3$[8],Metadata4$[8];
+STRING_OUTPUT Source_name$[8];
+STRING_OUTPUT Zone_name$[96,96];
+
+DIGITAL_OUTPUT Power_state[96];
+DIGITAL_OUTPUT Mute_state[96,96];
+
+ANALOG_OUTPUT Current_source[96];
+ANALOG_OUTPUT Current_volume[96];
+ANALOG_OUTPUT Current_bass[96];
+ANALOG_OUTPUT Current_treble[96];
+ANALOG_OUTPUT Current_balance[96,96];
+// DIGITAL_OUTPUT 
+// ANALOG_OUTPUT 
+// STRING_OUTPUT 
+
+/*******************************************************************************************
+  SOCKETS
+  (Uncomment and define socket definitions as needed)
+*******************************************************************************************/
+// TCP_CLIENT
+// TCP_SERVER
+// UDP_SOCKET
+
+/*******************************************************************************************
+  Parameters
+  (Uncomment and declare parameters as needed)
+*******************************************************************************************/
+// INTEGER_PARAMETER
+// SIGNED_INTEGER_PARAMETER
+// LONG_INTEGER_PARAMETER
+// SIGNED_LONG_INTEGER_PARAMETER
+// STRING_PARAMETER
+
+/*******************************************************************************************
+  Parameter Properties
+  (Uncomment and declare parameter properties as needed)
+*******************************************************************************************/
+/*
+#BEGIN_PARAMETER_PROPERTIES parameter_variable, parameter_variable, ...
+   // propValidUnits = // unitString or unitDecimal|unitHex|unitPercent|unitCharacter|unitTime|unitTicks;
+   // propDefaultUnit = // unitString, unitDecimal, unitHex, unitPercent, unitCharacter, unitTime or unitTicks;
+   // propBounds = lower_bound , upper_bound;
+   // propDefaultValue = ;  // or, propDefaultValue = "";
+   // propList = // { "value" , "label" } , { "value" , "label" } , ... ;
+   // propShortDescription = "status_bar_hint_text";
+   // #BEGIN_PROP_FULL_DESCRIPTION  line_1...  line_2...  line_n  #END_PROP_FULL_DESCRIPTION
+   // #BEGIN_PROP_NOTES line_1...  line_2...  line_n  #END_PROP_NOTES
+#END_PARAMETER_PROPERTIES
+*/
+
+/*******************************************************************************************
+  Structure Definitions
+  (Uncomment and define structure definitions as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: struct.myString = "";
+*******************************************************************************************/
+/*
+STRUCTURE MyStruct1
+{
+};
+
+MyStruct1 struct;
+*/
+
+/*******************************************************************************************
+  Global Variables
+  (Uncomment and declare global variables as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: myString = "";
+*******************************************************************************************/
+INTEGER giBufferActive;
+INTEGER debug;
+STRING gsInForParse$[16384];
+STRING gsNewline$[10];
+INTEGER giSourceIndexToTrueSource[8];
+INTEGER giTrueSourceToSourceIndex[8];
+INTEGER giHasSourceNames;
+
+// INTEGER
+// LONG_INTEGER
+// SIGNED_INTEGER
+// SIGNED_LONG_INTEGER
+// STRING
+
+/*******************************************************************************************
+  Functions
+  (Add any additional functions here)
+  Note:  Functions must be physically placed before the location in
+         the code that calls them.
+*******************************************************************************************/
+STRING_FUNCTION hexPad(string value$){
+	string paddedValue$[200];
+
+	if (len(value$) mod 2 = 1){
+		paddedValue$ = "0" + value$;
+	} else {
+		paddedValue$ = value$;
+	}
+
+	return (paddedValue$);
+}
+
+
+function doCommand(STRING cmd$)
+{
+	TX$ = cmd$ + "\x0D\x0A";
+}
+
+STRING_FUNCTION ctoh2(string in$)
+{
+	return (hexPad(itohex(byte(in$,1))));
+}
+
+STRING_FUNCTION stoh(string in$){
+
+	integer length, i, tempIn$;
+	string out$[128];
+	string char$[1];
+	string charAsHex$[2];
+	out$ = "";
+	
+	length = len(in$);
+	
+	for (i = 1 to length){        
+        char$ = chr(byte(in$, i));
+        
+		charAsHex$ = hexPad(itohex(byte(in$, i)));
+		out$ = out$ + charAsHex$;				
+	}
+	
+	return (out$);
+}
+
+
+STRING_FUNCTION htoc(STRING in$){
+
+	STRING char$[1];
+	char$ = chr(hextoi(in$));
+	return (char$);
+}
+
+STRING_FUNCTION htos(STRING in$){
+
+	INTEGER i;
+	STRING out$[150];
+	STRING byte$[2];
+	
+
+	for (i = 0 to len(in$)-1 step 2){
+		byte$ = RemoveByLength(2, in$);
+		if (byte$ <> ""){
+			out$ = out$ + htoc(byte$);
+		}
+	}
+	
+	return (out$);
+}
+
+INTEGER_FUNCTION twelveToTwelve(INTEGER value){
+	if (value >= 0x00 && value <= 0x0C){
+		return (value + 13);
+	} else if (value >= 0xF4){
+		return (value - 0xF4);
+	}
+}
+
+INTEGER_FUNCTION twentyToTwenty(INTEGER value){
+	if (value >= 0x00 && value <= 0x14){
+		return (value + 21);
+	} else if (value >= 0xEC){
+		return (value - 0xEC);
+	}
+}
+
+INTEGER_FUNCTION unTwelveToTwelve(INTEGER value){
+	SIGNED_INTEGER shiftedValue;
+	shiftedValue = value - 12;
+	
+	if (shiftedValue >= 0){
+		return (shiftedValue);
+	} else {
+		return (256 + shiftedValue);
+	}
+}
+
+INTEGER_FUNCTION unTwentyToTwenty(INTEGER value){
+	SIGNED_INTEGER shiftedValue;
+	shiftedValue = value - 20;
+	
+	if (shiftedValue >= 0){
+		return (shiftedValue);
+	} else {
+		return (256 + shiftedValue);
+	}
+}
+
+INTEGER_FUNCTION trueZoneValue(INTEGER zone)
+{
+
+	INTEGER trueZone;
+	INTEGER zoneDiff;
+	INTEGER extendedZones1;
+	INTEGER extendedZones2;
+	
+	extendedZones1 = hextoi("80");
+	extendedZones2 = hextoi("C0");
+
+	trueZone = 0x00;
+	zoneDiff = 0x00;
+	
+	// if (debug) trace("pre-zone: %d", zone);
+    
+	if (zone >= 32 && zone <= 63){
+		zoneDiff = zone - 32;
+		trueZone = trueZone + extendedZones1;
+		trueZone = trueZone + zoneDiff;
+	} else if (zone >= 64){
+		if (zone <> 96){
+			zoneDiff = zone - 64;
+			trueZone = trueZone + extendedZones2;
+			trueZone = trueZone + zoneDiff;
+		}
+	} else {
+		trueZone = zone;
+	}
+	
+		// if (debug) trace("post-zone: %d", trueZone);
+	
+	return (trueZone);
+}
+
+INTEGER_FUNCTION positionalZoneValue(INTEGER zone)
+{
+	INTEGER posZone;
+	INTEGER extendedZones1;
+	INTEGER extendedZones2;
+	
+	extendedZones1 = hextoi("80");
+	extendedZones2 = hextoi("C0");
+
+	if (zone >= extendedZones2)
+	{
+		posZone = zone - extendedZones2 + 64;
+	}
+	else if (zone >= extendedZones1 && zone < extendedZones2)
+	{
+		posZone = zone - extendedZones1 + 32;
+	}
+	else if (zone < extendedZones1)
+	{
+		if (zone <> 0x00)
+		{
+			posZone = zone;
+		} 
+		else
+		{
+			posZone = 96;		
+		}
+	}
+	
+	
+	return (posZone);
+}
+
+function init()
+{
+
+	STRING cmd$[20];
+	INTEGER i;
+
+	giHasSourceNames=off;
+	
+	cmd$ = "01FF";
+	doCommand(cmd$);
+	cmd$ = "02FF";
+	doCommand(cmd$);
+	cmd$ = "03FF";
+	doCommand(cmd$);
+	cmd$ = "04FF";
+	doCommand(cmd$);
+	cmd$ = "05FF";
+	doCommand(cmd$);
+	cmd$ = "06FF";
+	doCommand(cmd$);
+	cmd$ = "07FF";
+	doCommand(cmd$);
+	cmd$ = "38FF";
+	doCommand(cmd$);
+
+/*
+	for (i = 0 to 7 step 1){
+		cmd$ = "29FF" + hexPad(itohex(i));
+		doCommand(cmd$);
+		cmd$ = "47FF" + hexPad(itohex(i)) + "00";
+		doCommand(cmd$);
+		cmd$ = "47FF" + hexPad(itohex(i)) + "01";
+		doCommand(cmd$);
+		cmd$ = "47FF" + hexPad(itohex(i)) + "02";
+		doCommand(cmd$);
+		cmd$ = "47FF" + hexPad(itohex(i)) + "03";
+		doCommand(cmd$);
+	}
+*/
+}
+
+function getSourceDetails(STRING zone$)
+{
+	STRING cmd$[20];
+	INTEGER i;
+    
+    for (i = 0 to 7 step 1){
+	    cmd$ = "29" + zone$ + hexPad(itohex(i));
+		doCommand(cmd$);
+		cmd$ = "47" + zone$ + hexPad(itohex(i)) + "00";
+		doCommand(cmd$);
+		cmd$ = "47" + zone$ + hexPad(itohex(i)) + "01";
+		doCommand(cmd$);
+		cmd$ = "47" + zone$ + hexPad(itohex(i)) + "02";
+		doCommand(cmd$);
+		cmd$ = "47" + zone$ + hexPad(itohex(i)) + "03";
+		doCommand(cmd$);
+	}
+
+
+}
+
+function parseForSources(STRING token$)
+{
+	string command$[2];
+	string zone$[2];
+	string data$[150];
+	string source$[2];
+	string metadata$[150];
+	string tempChar$[1];
+	string tempSourceName$[25];
+	integer commandAsInt;
+	integer zoneAsInt;
+	integer metadataPosition;
+	integer i;
+	integer length;
+	integer nextChar;
+
+
+	
+	length = len(token$);
+	command$ = RemoveByLength(2,token$);
+	zone$ = RemoveByLength(2,token$);
+		
+	commandAsInt = hextoi(command$);
+	zoneAsInt = hextoi(zone$);
+	
+	if (length >= 5){
+/*
+		for (i = 0 to length-5){
+			tempChar$ = RemoveByLength(1,token$);
+			if (tempChar$ <> "" && tempChar$ <> "\x0D" && tempChar$ <> "\x0A" && tempChar$ <> "\r" && tempChar$ <> "\n") {
+				data$ = data$ + tempChar$;
+			} else {
+				break;
+			}
+		}
+*/
+
+		do {
+		
+			nextChar = getc(token$);
+			if (nextChar = 0x0D){
+				break;
+			} else {
+				data$ = data$ + chr(nextChar);
+			}
+		} until (len(token$) = 0);		
+		
+		
+		if (debug) trace("(%s) (%s) (%s)", command$, zone$, data$);
+
+		switch(commandAsInt)
+		{
+			case (0x29):
+			{
+				source$ = mid(data$, 1, 2);
+				if (len(mid(data$,9,len(data$))) <> 0){
+					tempSourceName$ = htos(mid(data$,9,len(data$)));
+					Source_name$[giSourceIndexToTrueSource[hextoi(source$)]] = tempSourceName$;
+				} else {
+					Source_name$[giSourceIndexToTrueSource[hextoi(source$)]] = "Source " + itoa(giSourceIndexToTrueSource[hextoi(source$)]);
+				}
+			}
+			case (0x46):
+			{
+				source$ = mid(data$, 1, 2);
+				data$ = mid(data$, 3, len(data$) - 2);
+				metadataPosition = hextoi(RemoveByLength(2,data$));
+				if(len(data$) > 0){
+					metadata$ = htos(data$);
+				} else {
+					metadata$ = "";
+				}
+				
+				switch(metadataPosition){
+					case (0x00):
+					{
+						Metadata1$[giSourceIndexToTrueSource[hextoi(source$)]] = metadata$;
+					}
+					case (0x01):
+					{
+						Metadata2$[giSourceIndexToTrueSource[hextoi(source$)]] = metadata$;
+					}
+					case (0x02):
+					{
+						Metadata3$[giSourceIndexToTrueSource[hextoi(source$)]] = metadata$;
+					}
+					case (0x03):
+					{
+						Metadata4$[giSourceIndexToTrueSource[hextoi(source$)]] = metadata$;
+					}
+				}
+			}		
+		}
+	}
+}
+
+function parseForZones(STRING token$)
+{
+	string command$[2];
+	string zone$[2];
+	string data$[256];
+	string toSend$[32];
+	string tempChar$[1];
+	string tempZoneName$[25];
+	integer commandAsInt;
+	integer zoneAsInt;
+	integer i;
+	integer length;
+	integer nextChar;
+
+
+	if (debug) trace("parseForZones %s", token$);
+	
+	length = len(token$);
+	command$ = RemoveByLength(2,token$);
+	zone$ = RemoveByLength(2,token$);
+		
+	commandAsInt = hextoi(command$);
+	zoneAsInt = hextoi(zone$);
+
+	if (commandAsInt = 0x94 || commandAsInt = 0x14)
+	{
+	//	return;
+	}
+	
+	if (giHasSourceNames=off && zone$ <> "FF"){
+		getSourceDetails(zone$);
+		giHasSourceNames = on;
+	}
+	
+	if (length >= 5){
+/*
+		for (i = 0 to length-5){
+			tempChar$ = RemoveByLength(1,token$);
+			if (tempChar$ <> "" && tempChar$ <> "\x0D" && tempChar$ <> "\x0A" && tempChar$ <> "\r" && tempChar$ <> "\n") {
+				data$ = data$ + tempChar$;
+			} else {
+				break;
+			}
+		}
+*/
+
+		do {
+		
+			nextChar = getc(token$);
+			if (nextChar = 0x0D){
+				break;
+			} else {
+				data$ = data$ + chr(nextChar);
+			}
+		} until (len(token$) = 0);
+
+		if (debug) trace("(%s) (%s) (%s)", command$, zone$, data$);
+		switch(commandAsInt){
+			case (0x01):
+			{
+				Power_state[positionalZoneValue(zoneAsInt)] = hextoi(data$);
+			}
+	        case (0x02):
+			{
+				Mute_state[positionalZoneValue(zoneAsInt)] = !hextoi(data$);
+
+			}
+	        case (0x03):
+			{
+				Current_source[positionalZoneValue(zoneAsInt)] = giSourceIndexToTrueSource[hextoi(data$)];
+			}
+	        case (0x04):
+			{
+				Current_volume[positionalZoneValue(zoneAsInt)] = hextoi(data$);
+			}
+			case (0x05):
+			{
+				Current_bass[positionalZoneValue(zoneAsInt)] = twelveToTwelve(hextoi(data$));
+			}
+			case (0x06):
+			{
+				Current_treble[positionalZoneValue(zoneAsInt)] = twelveToTwelve(hextoi(data$));
+			}
+			case (0x07):
+			{
+				Current_balance[positionalZoneValue(zoneAsInt)] = twentyToTwenty(hextoi(data$));
+			}
+			case (0x1C):
+			{
+				if (len(data$) > 0){
+					tempZoneName$ = htos(data$);
+					Zone_name$[positionalZoneValue(zoneAsInt)] = tempZoneName$;
+				} else {
+					Zone_name$[positionalZoneValue(zoneAsInt)] = "Zone " + itoa(positionalZoneValue(zoneAsInt));
+				}
+			}
+		}
+	}
+
+}
+
+
+
+
+/*******************************************************************************************
+  Event Handlers
+  (Uncomment and declare additional event handlers as needed)
+*******************************************************************************************/
+PUSH Initialize
+{
+    init();
+}
+
+PUSH All_On
+{
+    doCommand("01FF01");
+    doCommand("01FF");
+}
+
+PUSH All_Off
+{
+    doCommand("01FF00");
+    doCommand("01FF");
+}
+
+PUSH All_Zones_To_Source
+{
+
+	integer position;
+	STRING cmd$[6];
+	
+	position = GetLastModifiedArrayIndex();
+	
+	cmd$ = "03FF" + hexPad(itohex(giTrueSourceToSourceIndex[position]));
+	doCommand(cmd$);
+	cmd$ = "03FF";
+	doCommand(cmd$);
+}
+
+/*
+RELEASE input
+{
+    // TODO:  Add code here
+}
+*/
+
+CHANGE RX$
+{
+/*
+	String toParse$[2048];
+	String tempChar$[1];
+	integer i;
+*/
+//	integer nextChar;
+
+//#IF_SERIES2
+	if (giBufferActive=off)
+	{
+		giBufferActive=on;
+		
+		do
+		{
+			gsInForParse$ = gather(gsNewline$, RX$);
+			
+			if (CompareStrings(mid(gsInForParse$,1,2),"29") = 0 || CompareStrings(mid(gsInForParse$,1,2),"46") = 0)
+			{
+				parseForSources(gsInForParse$);
+			}
+			else
+			{
+				parseForZones(gsInForParse$);
+			}
+            
+		} until (Find(gsNewLine$,RX$)=0);
+		
+		giBufferActive=off;
+	}
+//#ENDIF
+/*
+#IF_SERIES3
+	do
+	{
+		
+		nextChar = getc(RX$);
+		if (debug) trace("%s", chr(nextChar));
+		if (nextChar = 0x0D)
+		{
+			if (debug) trace("Char was carriage return");			
+			nextChar = getc(RX$);
+			if (nextChar = 0x0A)
+			{
+				if (debug) trace("Char was newline");
+				if (debug) trace("Should parse: %s", gsInForParse$);
+				if (CompareStrings(mid(gsInForParse$,1,2),"29") = 0 || CompareStrings(mid(gsInForParse$,1,2),"46") = 0)
+				{
+					if (debug) trace("Sending to sources %s", gsInForParse$);
+					parseForSources(gsInForParse$);
+					if (debug) trace("Sent to sources %s", gsInForParse$);
+				}
+				else
+				{
+					if (debug) trace("Sending to zones %s", gsInForParse$);
+					parseForZones(gsInForParse$);
+					if (debug) trace("Sent to zones %s", gsInForParse$);
+				}
+			}
+		}
+		else
+		{
+			gsInForParse$ = gsInForParse$ + chr(nextChar);
+		}
+	} until (len(RX$) = 0);
+
+
+#ENDIF
+*/
+}
+
+CHANGE Set_Metadata1$
+{
+	integer position;
+	string source$[2];
+	string value$[100];
+	STRING cmd$[200];
+	
+	position = GetLastModifiedArrayIndex();
+	source$ = hexPad(itohex(giTrueSourceToSourceIndex[position]));
+	
+	cmd$ = "46FF" + source$ + "00" + stoh(Set_metadata1$[position]);
+	doCommand(cmd$);
+	cmd$ = "47FF" + source$ + "00";
+	doCommand(cmd$);	
+}
+
+CHANGE Set_Metadata2$
+{
+	integer position;
+	string source$[2];
+	string value$[100];
+	STRING cmd$[200];
+	
+	position = GetLastModifiedArrayIndex();
+	source$ = hexPad(itohex(giTrueSourceToSourceIndex[position]));
+	
+	cmd$ = "46FF" + source$ + "01" + stoh(Set_Metadata2$[position]);
+	doCommand(cmd$);
+	cmd$ = "47FF" + source$ + "01";
+	doCommand(cmd$);	
+}
+
+
+CHANGE Set_Metadata3$
+{
+	integer position;
+	string source$[2];
+	string value$[100];
+	STRING cmd$[200];
+	
+	position = GetLastModifiedArrayIndex();
+	source$ = hexPad(itohex(giTrueSourceToSourceIndex[position]));
+	
+	cmd$ = "46FF" + source$ + "02" + stoh(Set_Metadata3$[position]);
+	doCommand(cmd$);
+	cmd$ = "47FF" + source$ + "02";
+	doCommand(cmd$);	
+}
+
+
+CHANGE Set_Metadata4$
+{
+	integer position;
+	string source$[2];
+	string value$[100];
+	STRING cmd$[200];
+	
+	position = GetLastModifiedArrayIndex();
+	source$ = hexPad(itohex(giTrueSourceToSourceIndex[position]));
+	
+	cmd$ = "46FF" + source$ + "03" + stoh(Set_Metadata4$[position]);
+	doCommand(cmd$);
+	cmd$ = "47FF" + source$ + "03";
+	doCommand(cmd$);	
+}
+
+PUSH Power_on
+{
+	integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "01" + hexPad(itohex(trueZoneValue(position))) + "01\x0D\x0A";
+	cmd$ = cmd$ + "01" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+
+}
+
+PUSH Power_off
+{
+	integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "01" + hexPad(itohex(trueZoneValue(position))) + "00\x0D\x0A";
+	cmd$ = cmd$ + "01" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+PUSH Power_toggle
+{
+    integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "01" + hexPad(itohex(trueZoneValue(position))) + "04\x0D\x0A";
+	cmd$ = cmd$ + "01" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+PUSH Mute_off
+{
+	integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "02" + hexPad(itohex(trueZoneValue(position))) + "01\x0D\x0A";
+	cmd$ = cmd$ + "02" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+
+}
+
+PUSH Mute_on
+{
+	integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "02" + hexPad(itohex(trueZoneValue(position))) + "00\x0D\x0A";
+	cmd$ = cmd$ + "02" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+PUSH Mute_toggle
+{
+    integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "02" + hexPad(itohex(trueZoneValue(position))) + "02\x0D\x0A";
+	cmd$ = cmd$ + "02" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+PUSH Volume_up
+{
+	integer position;
+	STRING cmd$[10];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "11" + hexPad(itohex(trueZoneValue(position))) + "\x0D\x0A";
+	cmd$ = cmd$ + "04" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+PUSH Volume_down
+{
+	integer position;
+	STRING cmd$[10];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "12" + hexPad(itohex(trueZoneValue(position))) + "\x0D\x0A";
+	cmd$ = cmd$ + "04" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+CHANGE Set_volume
+{
+	integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "04" + hexPad(itohex(trueZoneValue(position))) + hexPad(itohex(Set_volume[position])) + "\x0D\x0A";
+	cmd$ = cmd$ + "04" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+CHANGE Set_bass
+{
+	integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "05" + hexPad(itohex(trueZoneValue(position))) + hexPad(itohex(unTwelveToTwelve(Set_bass[position]))) + "\x0D\x0A";
+	cmd$ = cmd$ + "05" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+CHANGE Set_treble
+{
+	integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "06" + hexPad(itohex(trueZoneValue(position))) + hexPad(itohex(unTwelveToTwelve(Set_treble[position]))) + "\x0D\x0A";
+	cmd$ = cmd$ + "06" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+CHANGE Set_balance
+{
+	integer position;
+	STRING cmd$[12];
+
+	position = GetLastModifiedArrayIndex();
+
+	cmd$ = "07" + hexPad(itohex(trueZoneValue(position))) + hexPad(itohex(unTwentyToTwenty(Set_balance[position]))) + "\x0D\x0A";
+	cmd$ = cmd$ + "07" + hexPad(itohex(trueZoneValue(position)));
+	doCommand(cmd$);
+}
+
+CHANGE Set_source
+{
+	integer position;
+	STRING cmd$[12];
+	STRING zone$[2];
+	STRING source$[2];
+
+	position = GetLastModifiedArrayIndex();
+	zone$ = hexPad(itohex(trueZoneValue(position)));
+	source$ = hexPad(itohex(giTrueSourceToSourceIndex[Set_source[position]]));
+
+	cmd$ = "03" + zone$ + source$ + "\x0D\x0A";
+	cmd$ = cmd$ + "03" + zone$;
+	doCommand(cmd$);
+}
+
+CHANGE debug_enabled
+{
+	debug = debug_enabled;
+}
+
+
+
+/*
+EVENT
+{
+    // TODO:  Add code here
+}
+*/
+
+/*
+SOCKETCONNECT
+{
+    // TODO:  Add code here
+}
+*/
+
+/*
+SOCKETDISCONNECT
+{
+    // TODO:  Add code here
+}
+*/
+
+/*
+SOCKETRECEIVE
+{
+    // TODO:  Add code here
+}
+*/
+
+/*
+SOCKETSTATUS
+{
+    // TODO:  Add code here
+}
+*/
+
+/*******************************************************************************************
+  Main()
+  Uncomment and place one-time startup code here
+  (This code will get called when the system starts up)
+*******************************************************************************************/
+
+Function Main()
+{
+	integer z;
+
+	#IF_SERIES2
+		gsNewline$ = "\n";
+	#ENDIF
+	#IF_SERIES3
+//		gsNewline$ = "\x0D\x0A";
+		gsNewline$ = "\x0A";
+	#ENDIF
+
+	giSourceIndexToTrueSource[0] = 5;
+	giSourceIndexToTrueSource[1] = 6;
+	giSourceIndexToTrueSource[2] = 7;
+	giSourceIndexToTrueSource[3] = 4;
+	giSourceIndexToTrueSource[4] = 8;
+	giSourceIndexToTrueSource[5] = 1;
+	giSourceIndexToTrueSource[6] = 2;
+	giSourceIndexToTrueSource[7] = 3;
+
+	giTrueSourceToSourceIndex[1] = 5;
+	giTrueSourceToSourceIndex[2] = 6;
+	giTrueSourceToSourceIndex[3] = 7;
+	giTrueSourceToSourceIndex[4] = 3;
+	giTrueSourceToSourceIndex[5] = 0;
+	giTrueSourceToSourceIndex[6] = 1;
+	giTrueSourceToSourceIndex[7] = 2;
+	giTrueSourceToSourceIndex[8] = 4;
+
+
+	giBufferActive = off;
+	giHasSourceNames = off;
+	debug = debug_enabled;
+	
+/*		
+	for (z = 1 to 96)
+	{
+		if (debug) trace("Zone %d == %s == %d", z, hexPad(itohex(trueZoneValue(z))), positionalZoneValue(trueZoneValue(z)));
+	}
+*/		
+
+    // TODO:  Add code here
+    // Initialize declared global and local variables/arrays as needed.
+
+    // WaitForInitializationComplete();
+    // If you are reading any Input or Output variables, uncomment
+    //   the WaitForInitializationComplete statement above and read
+    //   them afterwards.  Input/Output variables will not have
+    //   their correct values set until after the logic processor
+    //   runs and propagates the values to them.
+}
+

@@ -1,0 +1,156 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+*******************************************************************************************/
+/*
+Dealer Name: 	ControlWorks Consulting, LLC
+System Name: 	UTF-8 Processor
+Programmer:		lincoln@controlworks.com
+Comments:		v1 2006.03.10 - initial version
+                   2006.03.10 - revised to use hex representations throughout
+				V1.1 2015.03.10 - caleb@controlworks.com - 	updated module copyright and name
+Copyright (C) 2006-2015 ControlWorks Consulting, LLC All Rights Reserved – Use Subject to License.
+US Government Restricted Rights. Use, duplication or disclosure by the Government is subject to restrictions set forth in subparagraphs (a)-(d) of FAR 52.227-19.
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+*******************************************************************************************/
+#SYMBOL_NAME "UTF-8_Processor_(ControlWorks)_v1.1"
+#HINT "Removes and Translates UTF-8 characters where possible"
+#CATEGORY "10" // Serial
+#DEFAULT_VOLATILE
+#ENABLE_STACK_CHECKING
+#HELP_BEGIN
+***Use of this module on a standalone basis is unsuppored by ControlWorks***
+Copyright (C) 2006-2015 ControlWorks Consulting, LLC All Rights Reserved – Use Subject to License.
+US Government Restricted Rights. Use, duplication or disclosure by the Government is subject to restrictions set forth in subparagraphs (a)-(d) of FAR 52.227-19.
+This will translate selected characters from UTF-8 range U+2000-U+206F (General Punctuation)
+and U+0080-U+00FF (Latin-1 Suppliment). All other UTF-8 characters will be replaced with <space>
+#HELP_END
+
+#DEFINE_CONSTANT MAXSIZE 255			// Maximum string size
+#DEFINE_CONSTANT MAXINPUTS 20			// Maximum number of inputs to the module
+#DEFINE_CONSTANT SUBCHAR " "			// Character to replace unknown characters with
+
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+*******************************************************************************************/
+STRING_INPUT in$[MAXINPUTS][MAXSIZE]; 								// Set up module inputs
+
+STRING_OUTPUT out$[MAXINPUTS]; 										// Set up module outputs
+
+/*******************************************************************************************
+  Functions
+*******************************************************************************************/
+STRING_FUNCTION subChars(INTEGER iChar0, INTEGER iChar1, INTEGER iChar2, INTEGER length) {
+	// This function attempts to determine a single-byte replacement for a two character string
+	// iChar0 is the most significant character, iChar2 is the least significant; filled from 2-0
+	// length represents the number of characters in in the UTF string after the first nibble
+	STRING strNew$[3]; 												// Temporary variable to hold the reassembled string
+
+	IF (length = 2 && iChar1 = 0x80) {								// Basic punctuation (first byte after nibble is 80h)
+		IF      (iChar2 >= 0x90 && iChar2 <= 0x95) strNew$ = "-"; 	// Various types of dashes (hex 90-95) 
+		ELSE IF (iChar2 =  0x96) strNew$ = "||";					// Double pipe (hex 96)
+		ELSE IF (iChar2 =  0x97) strNew$ = "_";						// Underscore (hex 97) 
+		ELSE IF (iChar2 >= 0x98 && iChar2 <= 0x9B) strNew$ = "'"; 	// Single quotation marks (hex 98-9B)
+		ELSE IF (iChar2 >= 0x9C && iChar2 <= 0x9F) strNew$ = "\""; 	// Double quotation marks (hex 9C-9F)
+		ELSE IF (iChar2 =  0xA4) strNew$ = "."; 					// One dot leader (hex A4)
+		ELSE IF (iChar2 =  0xA5) strNew$ = "..";	 				// Two dot leader (hex A5)
+		ELSE IF (iChar2 =  0xA6) strNew$ = "...";	 				// Three dot leader (hex A6)
+		ELSE IF (iChar2 >= 0xB2 && iChar2 <= 0xB7) strNew$ = "'"; 	// Single Prime quotation marks (hex B2-B7)				 
+		ELSE strNew$ = SUBCHAR;										// No translation, insert substitute character
+	}
+	ELSE IF (length = 1 && iChar1 = 0xC2) {							// Symbols (nibbled byte is C2)
+		IF      (iChar2 = 0xA1) strNew$ = "!";						// Inverted exclamation mark (hex A1) 
+		ELSE IF (iChar2 =  0xA2) strNew$ = "c";						// Cent sign (hex A2)
+		ELSE IF (iChar2 =  0xA3) strNew$ = "p";						// Pounds Sign (gex A3)
+		ELSE IF (iChar2 =  0xA4) strNew$ = "y";						// Yen sign (hex A4)		
+		ELSE IF (iChar2 =  0xA5) strNew$ = "|";						// Broken bar (hex A5)
+		ELSE IF (iChar2 =  0xA9) strNew$ = "(C)";					// Copyright (hex A9)	
+		ELSE IF (iChar2 =  0xAE) strNew$ = "(R)";					// Registered Trademark (hex AE)	)	
+		ELSE IF (iChar2 =  0xBC) strNew$ = "1/4";					// Vulgar Fraction 1/4 (hex BC)	
+		ELSE IF (iChar2 =  0xBD) strNew$ = "1/2";					// Vulgar Fraction 1/2 (hex BD)
+		ELSE IF (iChar2 =  0xBE) strNew$ = "3/4";					// Vulgar Fraction 3/4 (hex BE) 	
+		ELSE IF (iChar2 =  0xBF) strNew$ = "?";						// Inverted Question Mark (hex BF)	
+		ELSE strNew$ = SUBCHAR;										// No translation, insert substitute character
+	}
+	ELSE IF (length = 1 && iChar1 = 0xC3) {							// Latin-1 (nibbled byte is C3)
+		IF      (iChar2 >= 0x80 && iChar2 <= 0x86) strNew$ = "A";	// Various Accented 'A's (hex 80-86)	
+		ELSE IF (iChar2 =  0x87)                   strNew$ = "C";	// Accented 'C' (hex 87)	
+		ELSE IF (iChar2 >= 0x88 && iChar2 <= 0x8B) strNew$ = "E";	// Various Accented 'E's (hex 88-8B)	
+		ELSE IF (iChar2 >= 0x8C && iChar2 <= 0x8F) strNew$ = "I";	// Various Accented 'I's (hex 8C-8F)
+		ELSE IF (iChar2 =  0x91)                   strNew$ = "N";   // Accented 'N' (hex 91)	
+		ELSE IF (iChar2 >= 0x92 && iChar2 <= 0x98) strNew$ = "O";	// Various Accented 'O's (hex 92-98)
+		ELSE IF (iChar2 >= 0x99 && iChar2 <= 0x9C) strNew$ = "U";	// Various Accented 'U's (hex 99-9C)
+		ELSE IF (iChar2 =  0x9D)                   strNew$ = "Y";	// Accented 'Y' (hex 9D)
+		ELSE IF (iChar2 >= 0xA0 && iChar2 <= 0xA6) strNew$ = "a";	// Various Accented 'a's (hex a0-a6)
+		ELSE IF (iChar2 =  0xA7)                   strNew$ = "c";	// Accebted 'c' (hex A7)
+		ELSE IF (iChar2 >= 0xA8 && iChar2 <= 0xAB) strNew$ = "e";   // Various Accented 'e's (hex A8-AB)
+		ELSE IF (iChar2 >= 0xAC && iChar2 <= 0xAF) strNew$ = "i";	// Various Accented 'i's (hex AC-AF)
+		ELSE IF (iChar2 =  0xB1)                   strNew$ = "n"; 	// Accented 'n' (hex B1)
+		ELSE IF (iChar2 >= 0xB2 && iChar2 <= 0xB8) strNew$ = "o";	// Various Accented 'o's (hex B2-B8)
+		ELSE IF (iChar2 >= 0xB9 && iChar2 <= 0xBC) strNew$ = "u"; 	// Various Accented 'u's (hex B9-BC)
+		ELSE IF (iChar2 =  0xBD)                   strNew$ = "y"; 	// Accented 'y' (hex BD)
+		ELSE IF (iChar2 =  0xBF)                   strNew$ = "y";	// Accented 'y' (hex BF)
+		ELSE strNew$ = SUBCHAR; 								    // No translation, insert substitute character
+	}             
+	ELSE {strNew$ = SUBCHAR;} 										// No translation, insert substitute character
+	
+	RETURN (strNew$); 												// Return the translated string to the calling
+																	// function
+}
+	
+FUNCTION parseString(INTEGER strIndex, STRING strProcess$ )
+{
+	// This function parses the string in strProcess character for character looking for 
+	// UTF-8 encoded characters to replace. When a character is encountred, the proper number
+	// of following characters are removed and passed to the subChars function for translation/
+	// replacement. strIndex represents the index of the input the string was received from
+	// (and therefore the output that the translated string should be sent on).  
+	INTEGER iChar, iJunk1, iJunk2; 									// Temporary variables to hold individual characters
+	STRING strTempOutput$[MAXSIZE]; 								// String to hold parsed string
+	
+	WHILE (LEN(strProcess$) > 0) {									// As long ss there is data remaining in the string
+		iChar = GETC(strProcess$); 									// Get a character from the front end of the string		
+		IF (iChar <= 0x80) {										// Standard ASCII character
+			strTempOutput$ = strTempOutput$ + CHR(iChar); 			// Add the character as-is to the output string
+		}
+		ELSE IF (iChar > 0x80) {									// Character is UTF-8 encoded
+			IF (((iChar & 0xF0) = 0xC0)||((iChar & 0xF0) = 0xD0)) { // Two byte chatacter representation (first nibble is hex C or D)
+				iJunk1 = GETC(strProcess$); 						// Remove 'garbage' character from string
+				strTempOutput$ = strTempOutput$ + subChars(0, iChar, iJunk1, 1); // Process the removed characters 
+			}
+			ELSE IF ((iChar & 0xF0) = 0xE0) {						// Three byte character representation (first nibble is hex E)
+				iJunk1 = GETC(strProcess$);							// Remove next character and hold for processing
+				iJunk2 = GETC(strProcess$); 						// Remove third character and hold for processing
+				strTempOutput$ = strTempOutput$ + subChars(iChar, iJunk1, iJunk2, 2); // Process the removed characters 				
+			}
+			ELSE IF ((iChar & 0xF0) = 0xF0) {						// Four byte character representation (first nibble is hex F) 
+				iJunk1 = GETC(strProcess$);							// Remove first 'garbage' character from string				iJunk1 = GETC(strProcess$); 
+				iJunk1 = GETC(strProcess$); 						// Remove second 'garbage' character from string
+				iJunk1 = GETC(strProcess$); 						// Remove third 'garbage' character from string [added Lincoln]
+				strTempOutput$ = strTempOutput$ + SUBCHAR; 			// Use a substitute character
+			} // End of multiple character block
+		} // End character value > 128
+	} // End loop
+	
+	out$[strIndex] = strTempOutput$; 	 							// Output the parsed string to the proper output of the module
+}
+
+/*******************************************************************************************
+  Event Handlers
+*******************************************************************************************/
+CHANGE in$ {
+	// This event is fired whenever any of the inputs changes
+	STRING strInBuffer$[MAXSIZE]; 									// Create a temporary variable to process the received string
+	INTEGER intLastIndex; 											// Integer to track the last modified index
+	intLastIndex = GETLASTMODIFIEDARRAYINDEX(); 					// Get the index of the last input that changed
+	
+	strInBuffer$ = in$[intLastIndex]; 								// Put the received data in the temp string
+
+	CALL parseString(intLastIndex, strInBuffer$);					// Call the function to parse the string
+}
+
+FUNCTION main(){
+	PRINT ("UTF-8 Processor (ControlWorks) - Copyright (C) 2015 ControlWorks Consulting, LLC All Rights Reserved - Use subject to license.\n");
+}

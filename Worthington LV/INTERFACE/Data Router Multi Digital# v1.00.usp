@@ -1,0 +1,55 @@
+
+#CATEGORY "0"
+#INCLUDEPATH "..\bin"
+#USER_SIMPLSHARP_LIBRARY "DataRouterMulti"
+
+
+#DEFINE_CONSTANT	MAX_IO 		51
+#DEFINE_CONSTANT	MAX_ITEMS 	51
+
+
+ANALOG_INPUT	_SKIP_,
+				i[ MAX_IO ];
+DIGITAL_INPUT	_SKIP_,
+				data[ MAX_IO ];
+
+DIGITAL_OUTPUT	_SKIP_,
+				o[ MAX_ITEMS ];
+
+
+
+DataRouterMulti d;
+
+
+CHANGE i
+{	
+	Integer iIndex;
+	
+	iIndex = GetLastModifiedArrayIndex( );
+	
+	d.ChangeInput( iIndex );
+}
+
+CHANGE data
+{	
+	Integer iIndex;
+	
+	iIndex = GetLastModifiedArrayIndex( );
+	
+	d.ChangeData( iIndex );
+}
+
+Callback Function SetOutput( Integer oIndex, Integer iIndex ) { o[ oIndex ] = data[ iIndex ]; }
+Callback Integer_Function GetInput( Integer iIndex ) { return( i[ iIndex ] + 1 ); }
+
+
+
+Function Main( )
+{
+	d.DataRouterMultiMain( MAX_ITEMS );
+	
+	RegisterDelegate( d, _Output,	SetOutput );
+	RegisterDelegate( d, _Input,	GetInput );
+
+}
+

@@ -1,0 +1,531 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+  (Fill in comments below)
+*******************************************************************************************/
+/*
+Dealer Name: Crestron Electronics, Inc.
+System Name:
+System Number:
+Programmer: LP
+Comments:
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+  (Uncomment and declare compiler directives as needed)
+*******************************************************************************************/
+// #ENABLE_DYNAMIC
+#SYMBOL_NAME "Bose Lifestyle 235 v1.1 Processor"
+// #HINT ""
+#DEFINE_CONSTANT	USA		0x00
+#DEFINE_CONSTANT	Europe	0x01
+#DEFINE_CONSTANT	Japan	0x02
+
+// #CATEGORY "" 
+// #PRINT_TO_TRACE
+// #DIGITAL_EXPAND 
+// #ANALOG_SERIAL_EXPAND 
+// #OUTPUT_SHIFT 
+// #HELP_PDF_FILE ""
+#DEFAULT_VOLATILE
+#ENABLE_STACK_CHECKING
+// #ENABLE_TRACE
+#ENCODING_ASCII
+// #ENCODING_UTF16
+// #ENCODING_INHERIT_FROM_PARENT
+// #ENCODING_INHERIT_FROM_PROGRAM
+
+#HELP_BEGIN
+To be used with the Bose Lifestyle 235 v1.1.umc module only.
+Not to be used as a stand-alone module.
+#HELP_END
+
+/*******************************************************************************************
+  Include Libraries
+  (Uncomment and include additional libraries as needed)
+*******************************************************************************************/
+// #CRESTRON_LIBRARY ""
+// #USER_LIBRARY ""
+
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+  (Uncomment and declare inputs and outputs as needed)
+*******************************************************************************************/
+DIGITAL_INPUT AM_Selected;
+DIGITAL_INPUT FM_Selected;
+DIGITAL_INPUT Clear_From_Device;
+DIGITAL_INPUT Tuner_KP[12];
+BUFFER_INPUT Command_To_Send[100];
+BUFFER_INPUT From_Device[1000]; 
+
+// DIGITAL_OUTPUT 
+ANALOG_OUTPUT Main_Source_Value;
+ANALOG_OUTPUT Zone_2_Source_Value;
+ANALOG_OUTPUT Main_Volume_Value;
+STRING_OUTPUT To_Device;
+STRING_OUTPUT Version_Text;
+STRING_OUTPUT Tuner_Entry_Text;
+STRING_OUTPUT Tuner_Preset_Text;
+STRING_OUTPUT RDS_Station_Text;
+STRING_OUTPUT RDS_Program_Text;
+
+ANALOG_OUTPUT Speaker_Type_Value;
+ANALOG_OUTPUT Mute_Loudness_Value;
+ANALOG_OUTPUT Speaker_State_Value;
+DIGITAL_OUTPUT Query_Room_Status_Clear;
+STRING_OUTPUT Tuner_Frequency;
+
+/*******************************************************************************************
+  SOCKETS
+  (Uncomment and define socket definitions as needed)
+*******************************************************************************************/
+// TCP_CLIENT
+// TCP_SERVER
+// UDP_SOCKET
+
+/*******************************************************************************************
+  Parameters
+  (Uncomment and declare parameters as needed)
+*******************************************************************************************/
+INTEGER_PARAMETER Tuner_Region;
+// SIGNED_INTEGER_PARAMETER
+// LONG_INTEGER_PARAMETER
+// SIGNED_LONG_INTEGER_PARAMETER
+// STRING_PARAMETER
+
+/*******************************************************************************************
+  Parameter Properties
+  (Uncomment and declare parameter properties as needed)
+*******************************************************************************************/
+/*
+#BEGIN_PARAMETER_PROPERTIES parameter_variable, parameter_variable, ...
+   // propValidUnits = // unitString or unitDecimal|unitHex|unitPercent|unitCharacter|unitTime|unitTicks;
+   // propDefaultUnit = // unitString, unitDecimal, unitHex, unitPercent, unitCharacter, unitTime or unitTicks;
+   // propBounds = lower_bound , upper_bound;
+   // propDefaultValue = ;  // or, propDefaultValue = "";
+   // propList = // { "value" , "label" } , { "value" , "label" } , ... ;
+   // propShortDescription = "status_bar_hint_text";
+   // #BEGIN_PROP_FULL_DESCRIPTION  line_1...  line_2...  line_n  #END_PROP_FULL_DESCRIPTION
+   // #BEGIN_PROP_NOTES line_1...  line_2...  line_n  #END_PROP_NOTES
+#END_PARAMETER_PROPERTIES
+*/
+
+/*******************************************************************************************
+  Structure Definitions
+  (Uncomment and define structure definitions as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: struct.myString = "";
+*******************************************************************************************/
+/*
+STRUCTURE MyStruct1
+{
+};
+
+MyStruct1 struct;
+*/
+
+/*******************************************************************************************
+  Global Variables
+  (Uncomment and declare global variables as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: myString = "";
+*******************************************************************************************/
+INTEGER a;
+INTEGER iCheckSumOut;
+INTEGER iReady;
+INTEGER iWaitingForReady;
+INTEGER iCurrentCommand;
+INTEGER iProcessFromDevice;
+INTEGER	iProcessCmdToSend;
+INTEGER iTrash;
+STRING 	sStringQueue[50][100];
+STRING sResponse[150];
+STRING sOpCode[2];
+INTEGER iOpCodeFail;
+STRING sErrorCode[2];
+STRING sCommandToSend[100];
+INTEGER iNotificationType;
+
+INTEGER iFMStationStart;
+INTEGER	iFMStationEnd;
+INTEGER	iFMStationStep;
+LONG_INTEGER iFMFrequencyStart;
+LONG_INTEGER iFMFrequencyEnd;
+INTEGER	iFMFrequencyStep;
+
+INTEGER	iAMStationStart;
+INTEGER	iAMStationEnd;
+INTEGER	iAMStationStep;
+INTEGER	iAMFrequencyStart;
+INTEGER	iAMFrequencyEnd;
+INTEGER	iAMFrequencyStep;
+
+STRING sTunerNumber[6];
+STRING sTunerCommand[10];
+INTEGER iStationValue;
+INTEGER iStationStatus;
+LONG_INTEGER iFrequencyStatus;
+STRING sFrequencyStatus[6];
+
+/*******************************************************************************************
+  Functions
+  (Add any additional functions here)
+  Note:  Functions must be physically placed before the location in
+         the code that calls them.
+*******************************************************************************************/
+
+Function QueueAdd(STRING sStringToAdd)
+{
+	INTEGER a;
+
+	for(a = 50 to 2 step -1)
+	{
+		sStringQueue[a] = sStringQueue[a - 1];
+	}
+
+	sStringQueue[1] = sStringToAdd;
+
+	for(a = 50 to 1 step -1)
+	{
+		if(len(sStringQueue[a]))
+		{
+			iCurrentCommand = a;
+			break;
+		}
+		iCurrentCommand = 0;
+	}
+}
+
+Function SendNext()
+{
+	INTEGER a;
+
+	To_Device = sStringQueue[iCurrentCommand];
+	clearbuffer(sStringQueue[iCurrentCommand]);
+	iReady = 0;
+
+	for(a = 50 to 1 step -1)
+	{
+		if(len(sStringQueue[a]))
+		{
+			iCurrentCommand = a;
+			break;
+		}
+		iCurrentCommand = 0;
+	}
+}
+
+/*******************************************************************************************
+  Event Handlers
+  (Uncomment and declare additional event handlers as needed)
+*******************************************************************************************/
+
+CHANGE Command_To_Send
+{
+	INTEGER a;
+	INTEGER iPacketLength;
+	
+	if(iProcessCmdToSend = 0)
+	{
+		iProcessCmdToSend = 1;
+		while(find("Nortserc", Command_To_Send))
+		{
+			sCommandToSend = remove("Nortserc", Command_To_Send);	// added delimeter for incoming commands from simplwindows
+			sCommandToSend = left(sCommandToSend, len(sCommandToSend) - 8);		
+			iCheckSumOut = 0;
+			makestring(sCommandToSend, "%s%s", chr(len(sCommandToSend) + 2), sCommandToSend);
+			for(a = 1 to len(sCommandToSend))
+			{
+				iCheckSumOut = iCheckSumOut ^ byte(sCommandToSend, a);
+			}
+			makestring(sCommandToSend, "%s%s", sCommandToSend, chr(iCheckSumOut));
+			QueueAdd(sCommandToSend);
+			if(iReady = 1 && iCurrentCommand <> 0)
+				SendNext();
+		}
+		iProcessCmdToSend = 0;
+	}
+}
+
+CHANGE From_Device
+{
+	INTEGER iPacketLength;
+
+	if(iProcessFromDevice = 0)
+	{
+		iProcessFromDevice = 1;
+		while(len(From_Device))
+		{
+			iPacketLength = byte(From_Device, 1);
+			if(iPacketLength <= len(From_Device))
+			{
+				sResponse = removebylength(iPacketLength, From_Device);
+				sOpCode = mid(sResponse, 3, 2);
+				if(len(sResponse))
+				{
+					if(bit(sResponse, 2, 7) = 0 && bit(sResponse, 2, 3) = 0) 	// **** not an error nor notification response packet
+					{
+						if(sOpCode = "\x01\x00")								// ready packet response
+						{
+							iReady = 1;
+							if(iCurrentCommand <> 0)		
+								SendNext();
+						}
+						else if(sOpCode = "\x01\x15")								// main volume response
+						{
+							Main_Volume_Value = byte(sResponse, 5);
+						}
+						else if(sOpCode = "\x04\x01")								// version response
+						{
+							Version_Text = mid(sResponse, 5, 12);
+						}
+						else if(sOpCode = "\x01\x49")								// tuner station response
+						{
+							iStationStatus = byte(sResponse, 5) + (byte(sResponse, 6) * 0x0100);
+							trace("iStationStatus:%d\n", iStationStatus);
+							if(AM_Selected)
+							{
+								iFrequencyStatus = (((iStationStatus - iAMStationStart) / iAMStationStep) * iAMFrequencyStep) + iAMFrequencyStart;
+								makestring(Tuner_Frequency, "%ld kHz", iFrequencyStatus); 
+							}
+								
+							else if(FM_Selected)
+							{
+								iFrequencyStatus = (((iStationStatus - iFMStationStart) / iFMStationStep) * iFMFrequencyStep) + iFMFrequencyStart;
+								sFrequencyStatus = ltoa(iFrequencyStatus);
+								makestring(Tuner_Frequency, "%s.%s MHz", left(sFrequencyStatus, len(sFrequencyStatus) - 3), mid(sFrequencyStatus, len(sFrequencyStatus) - 2, 1)); 
+							}
+						}
+						else if(sOpCode = "\x04\x03")								// tuner preset response
+						{
+							Tuner_Preset_Text = mid(sResponse, find("\x04\x03", sResponse) + 2, find("\x0A\x00", sResponse) - 5);
+						}
+						else if(sOpCode = "\x01\x0A")								// zone source response
+						{
+							Main_Source_Value = byte(sResponse, 5);
+							Zone_2_Source_Value = byte(sResponse, 6);
+						}
+						else if(sOpCode = "\x01\x4F" && iPacketLength = 12)								// RDS program service response
+						{
+							if(find("\x00\x00\x00\x00\x00\x00\x00\x00", sResponse))		 				// if data field is empty
+								RDS_Station_Text = "n/a";
+							else
+								RDS_Station_Text = mid(sResponse, 5, 8);	
+						}
+						else if(sOpCode = "\x01\x4F" && iPacketLength = 68)								// RDS radio text response
+						{
+							if(find("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", sResponse) <> 0) 				// if data field is NOT empty
+								RDS_Program_Text = "n/a";
+							else
+								RDS_Program_Text = mid(sResponse, 5, 64);
+						}
+						else if(sOpCode = "\x01\x1D")													// query system ready response
+						{
+							if(byte(sResponse, 5) = 1)
+							{
+								iReady = 1;
+								if(iCurrentCommand <> 0)		
+									SendNext();
+		                    }
+							else
+							{
+								iReady = 0;
+							}
+						}
+						else if(sOpCode = "\x01\x11")													// room status response
+						{
+							Speaker_Type_Value = byte(sResponse, 5);
+							Mute_Loudness_Value = byte(sResponse, 6);
+							Speaker_State_Value = byte(sResponse, 7);
+							processlogic();
+							Query_Room_Status_Clear = 1;
+							Query_Room_Status_Clear = 0;
+						}
+					}
+					else if(bit(sResponse, 2, 7) = 1) 							// **** is an error response packet
+					{
+						iOpCodeFail = byte(sResponse, 4);							// second byte of opcode of failed command
+						makestring(sErrorCode, "%s", mid(sResponse, 5, 2));			// errorcode of command that failed
+		
+						if(iOpcodeFail = 0x0004) 									// volume opcode
+							trace("Error - Main Volume Command\n");
+						else if(iOpcodeFail = 0x004A) 								// tuner station opcode
+							trace("Error - Tuner Station Command\n");
+		
+						if(sErrorCode = "\xFF\xFE")								// errorcode messages
+							trace("Error Code - Packet Timeout\n");
+						else if(sErrorCode = "\xFF\xFC")
+							trace("Error Code - Invalid Status Byte\n");
+						else if(sErrorCode = "\xFF\xFB")
+							trace("Error Code - Not Available\n");
+						else if(sErrorCode = "\xFF\xFA")
+							trace("Error Code - Invalid Checksum\n");
+						else if(sErrorCode = "\xFF\xEF")
+							trace("Error Code - Invalid Opcode\n");
+						else if(sErrorCode = "\xFF\xEE")
+							trace("Error Code - Incorrect Argument\n");
+						else if(sErrorCode = "\xFF\xED")
+							trace("Error Code - Internal Hardware\n");
+						
+					}
+					else if(bit(sResponse, 2, 3) = 1) 							// **** is a notification response packet
+					{
+						iNotificationType = byte(sResponse, 4);						// get notification packet type
+						if(iNotificationType = 0x0002)								// is an assert notification packet			
+						{															// (sent if a failure in the bose occurs)
+							trace("Assert Code - %s\n", mid(sResponse, 5, 4));
+							trace("Assert Message - %s\n", mid(sResponse, 9, len(sResponse) - 8));
+						}
+						else if(iNotificationType = 0x0000)							// is a debug notification packet
+							trace("Debug Packet - %s\n", mid(sResponse, 5, len(sResponse) - 4));			
+					}
+				}
+			}
+		}
+		iProcessFromDevice = 0;
+	}
+}
+
+PUSH Tuner_KP		// used to send channel number command
+{
+	INTEGER a;
+
+	switch(getlastmodifiedarrayindex())
+	{
+		case(1):
+			makestring(sTunerNumber, "%s1", sTunerNumber);
+		case(2):
+			makestring(sTunerNumber, "%s2", sTunerNumber);
+		case(3):
+			makestring(sTunerNumber, "%s3", sTunerNumber);
+		case(4):
+			makestring(sTunerNumber, "%s4", sTunerNumber);
+		case(5):
+			makestring(sTunerNumber, "%s5", sTunerNumber);
+		case(6):
+			makestring(sTunerNumber, "%s6", sTunerNumber);
+		case(7):
+			makestring(sTunerNumber, "%s7", sTunerNumber);
+		case(8):
+			makestring(sTunerNumber, "%s8", sTunerNumber);
+		case(9):
+			makestring(sTunerNumber, "%s9", sTunerNumber);
+		case(10):
+			makestring(sTunerNumber, "%s0", sTunerNumber);
+		case(11):		// clear
+		{
+			clearbuffer(sTunerNumber);
+		}
+		case(12):		// send
+		{
+			if(AM_Selected)
+				iStationValue = (((atoi(sTunerNumber) - iAMFrequencyStart) * iAMStationStep) / iAMFrequencyStep) + iAMStationStart;
+			else if(FM_Selected)
+				iStationValue = ((((atoi(sTunerNumber) * 100) - iFMFrequencyStart) * iFMStationStep) / iFMFrequencyStep) + iFMStationStart;
+
+			makestring(sTunerCommand, "\x07\x00\x01\x4A%s%s", chr(iStationValue mod 0x0100), chr(iStationValue / 0x0100));
+			iCheckSumOut = 0;
+			for(a = 1 to len(sTunerCommand))
+			{
+				iCheckSumOut = iCheckSumOut ^ byte(sTunerCommand, a);
+			}
+			makestring(sTunerCommand, "%s%s", sTunerCommand, chr(iCheckSumOut));
+			QueueAdd(sTunerCommand);
+			if(iReady = 1 && iCurrentCommand <> 0)
+				SendNext();
+			clearbuffer(sTunerNumber);
+		}
+	}
+	if(len(sTunerNumber) > 0)		// if number string exists
+	{
+		if(AM_Selected)
+			makestring(Tuner_Frequency, "%s*", sTunerNumber);	// send to text field 
+		if(FM_Selected)
+			makestring(Tuner_Frequency, "%s.%s*", left(sTunerNumber, len(sTunerNumber) - 1), right(sTunerNumber, 1));	// send to text field 
+	}
+	else							// if not
+		makestring(Tuner_Frequency, "*");		// clear text field
+}		
+
+PUSH AM_Selected
+{
+	clearbuffer(sTunerNumber);
+}
+
+PUSH FM_Selected
+{
+	clearbuffer(sTunerNumber);
+}
+
+PUSH Clear_From_Device
+{
+	clearbuffer(From_Device);
+}
+
+/*******************************************************************************************
+  Main()
+  Uncomment and place one-time startup code here
+  (This code will get called when the system starts up)
+*******************************************************************************************/
+
+Function Main()
+{
+	INTEGER a;
+
+	iReady = 1;
+	iProcessFromDevice = 0;
+	iProcessCmdToSend = 0;
+
+	for(a = 1 to 50)
+		clearbuffer(sStringQueue[a]);
+
+	if(Tuner_Region = USA)
+	{
+		iFMStationStart = 8;
+		iFMStationEnd = 816;
+		iFMStationStep = 8;
+		iFMFrequencyStart = 87700;
+		iFMFrequencyEnd = 107900;
+		iFMFrequencyStep = 200;
+		
+		iAMStationStart = 1;
+		iAMStationEnd = 119;
+		iAMStationStep = 1;
+		iAMFrequencyStart = 530;
+		iAMFrequencyEnd = 1710;
+		iAMFrequencyStep = 10;
+	}
+	else if(Tuner_Region = Europe)
+	{
+		iFMStationStart = 2;
+		iFMStationEnd = 822;
+		iFMStationStep = 2;
+		iFMFrequencyStart = 87500;
+		iFMFrequencyEnd = 108000;
+		iFMFrequencyStep = 50;
+		
+		iAMStationStart = 1;
+		iAMStationEnd = 122;
+		iAMStationStep = 1;
+		iAMFrequencyStart = 522;
+		iAMFrequencyEnd = 1611;
+		iAMFrequencyStep = 9;
+	}
+	else if(Tuner_Region = Japan)
+	{
+		iFMStationStart = 4;
+		iFMStationEnd = 564;
+		iFMStationStep = 4;
+		iFMFrequencyStart = 76000;
+		iFMFrequencyEnd = 90000;
+		iFMFrequencyStep = 100;
+		
+		iAMStationStart = 1;
+		iAMStationEnd = 123;
+		iAMStationStep = 1;
+		iAMFrequencyStart = 531;
+		iAMFrequencyEnd = 1629;
+		iAMFrequencyStep = 9;
+	}
+}
+

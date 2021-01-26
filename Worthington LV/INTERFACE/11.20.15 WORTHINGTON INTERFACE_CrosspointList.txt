@@ -1,0 +1,28 @@
+Crosspoint listing for C:\Users\Patrick Liedtke\Desktop\Worthington\INTERFACE\11.20.15 WORTHINGTON INTERFACE.SMW
+
+Note:  Crosspoint symbols with EquipID or ControlID set to 0d are not routeable.
+
+Equipment Crosspoint Routing.                                                                       EquipID
+===========================================================================================================
+S-1 in macro S-3.1.1 (Module File C:\Users\Patrick Liedtke\Desktop\Worthington\INTERFACE\S          1
+ource Control Device xPt. v1.05.umc)                                                                
+S-1 in macro S-3.2.1 (Module File C:\Users\Patrick Liedtke\Desktop\Worthington\INTERFACE\S          2
+ource Control Device xPt. v1.05.umc)                                                                
+S-1 in macro S-3.3.1 (Module File C:\Users\Patrick Liedtke\Desktop\Worthington\INTERFACE\S          3
+ource Control Device xPt. v1.05.umc)                                                                
+S-1 in macro S-3.4.1 (Module File C:\Users\Patrick Liedtke\Desktop\Worthington\INTERFACE\S          4
+ource Control Device xPt. v1.05.umc)                                                                
+S-1 in macro S-2.1.2 (Module File C:\Users\Patrick Liedtke\Desktop\Worthington\INTERFACE\A          1001
+VZ Control Device xPt v1.07.umc)                                                                    
+
+Control Crosspoint Routing.                                                                         ControlID
+=============================================================================================================
+S-1.3.2 in macro S-5.1.1.1 (Module File C:\Users\Patrick Liedtke\Desktop\Worthington\INTER          2001
+FACE\AVZ Control Interface xPt v1.07.umc)                                                           
+S-1.3.2 in macro S-5.2.1.2 (Module File C:\Users\Patrick Liedtke\Desktop\Worthington\INTER          2002
+FACE\AVZ Control Interface xPt v1.07.umc)                                                           
+S-2 in macro S-5.1.2.1 (Module File C:\Users\Patrick Liedtke\Desktop\Worthington\INTERFACE          11001
+\Source Control Interface xPt. v1.05.umc)                                                           
+S-2 in macro S-5.2.2.1 (Module File C:\Users\Patrick Liedtke\Desktop\Worthington\INTERFACE          11002
+\Source Control Interface xPt. v1.05.umc)                                                           
+

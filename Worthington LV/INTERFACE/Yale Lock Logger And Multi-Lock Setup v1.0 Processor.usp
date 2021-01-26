@@ -1,0 +1,711 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+  (Fill in comments below)
+*******************************************************************************************/
+/*
+Dealer Name: Crestron Electronics, Inc.
+System Name:
+System Number:
+Programmer: LP
+Comments:
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+  (Uncomment and declare compiler directives as needed)
+*******************************************************************************************/
+#SYMBOL_NAME "Yale Lock Logger And Multi-Lock Setup v1.0 Processor"
+// #HINT ""
+#DEFINE_CONSTANT MAX_QUE	50
+#DEFINE_CONSTANT MAX_LENGTH	255
+
+#DEFINE_CONSTANT DATE_TIME_24	0
+#DEFINE_CONSTANT DATE_TIME_12	1
+
+#DEFINE_CONSTANT ciUserMax	20
+#DEFINE_CONSTANT ciFieldMax	40
+// #ENABLE_TRACE
+
+// #CATEGORY "" 
+#DEFAULT_VOLATILE
+// #DEFAULT_NONVOLATILE
+#ENABLE_STACK_CHECKING
+/*
+#HELP_BEGIN
+   (add additional lines of help lines)
+#HELP_END
+*/
+
+/*******************************************************************************************
+  Include Libraries
+  (Uncomment and include additional librarys as needed)
+*******************************************************************************************/
+// #CRESTRON_LIBRARY ""
+// #USER_LIBRARY ""
+
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+  (Uncomment and declare inputs and outputs as needed)
+*******************************************************************************************/
+
+DIGITAL_INPUT Setup_Update_Locks, _SKIP_,_SKIP_;
+DIGITAL_INPUT Setup_Cancel_Update;
+DIGITAL_INPUT Setup_Store_Current_List;
+DIGITAL_INPUT Setup_Recover_Stored_List;
+DIGITAL_INPUT Setup_Refresh_List;
+DIGITAL_INPUT _SKIP_;
+DIGITAL_INPUT _SKIP_, _SKIP_, _SKIP_;
+
+DIGITAL_INPUT Log_Date_Time_Format_12HR;
+DIGITAL_INPUT Log_Clear_List, Log_Refresh_List, _SKIP_;
+
+DIGITAL_INPUT Setup_Select_Field[ciFieldMax], _SKIP_;
+ 
+ANALOG_INPUT Log_Output_List_Size;
+STRING_INPUT Log_Events_Text_In[MAX_LENGTH], _SKIP_;
+
+STRING_INPUT Setup_Keyboard_Text_In[50];
+
+
+DIGITAL_OUTPUT Setup_Is_Updating;
+DIGITAL_OUTPUT Setup_Updating_Complete;
+DIGITAL_OUTPUT Setup_User_Name_Or_PIN_Missing;
+DIGITAL_OUTPUT Setup_Update_Cancelled;
+DIGITAL_OUTPUT Setup_Current_List_Stored;
+DIGITAL_OUTPUT _SKIP_, _SKIP_, _SKIP_;
+
+DIGITAL_OUTPUT Setup_Duplicate_PIN;
+DIGITAL_OUTPUT Setup_Invalid_PIN_Length, _SKIP_;
+DIGITAL_OUTPUT To_Lock_Set_User_PIN;
+DIGITAL_OUTPUT To_Lock_User_Delete, _SKIP_, _SKIP_;
+ 
+DIGITAL_OUTPUT Setup_Field_Selected[ciFieldMax], _SKIP_;
+
+ANALOG_OUTPUT Setup_Field_Selected_Val, _SKIP_;
+
+ANALOG_OUTPUT Setup_Updating_Progress_Gauge;
+STRING_OUTPUT Setup_Text_Out, _SKIP_;
+
+STRING_OUTPUT To_Lock_User_Number;
+STRING_OUTPUT To_Lock_User_Name;
+STRING_OUTPUT To_Lock_User_PIN, _SKIP_;
+
+
+STRING_OUTPUT Log_List_Item[MAX_QUE], _SKIP_;
+
+
+STRING_OUTPUT Setup_User_Number[ciUserMax], _SKIP_;
+STRING_OUTPUT Setup_User_Name_Text[ciUserMax], _SKIP_;
+STRING_OUTPUT Setup_User_PIN_Text[ciUserMax];
+
+
+
+/*******************************************************************************************
+  Global Variables
+  (Uncomment and declare global variables as needed)
+  Note:  Be sure to initialize all declared STRING variables as needed
+         For example, in Function Main: myString = "";
+*******************************************************************************************/
+
+STRUCTURE UserEntry
+{
+	STRING UserName[50];
+	INTEGER Enable;
+	STRING PIN[8];
+};
+
+UserEntry OneEntry;
+UserEntry Entry[ciUserMax];
+
+
+
+
+INTEGER iQueLimit;
+
+INTEGER	iField;
+INTEGER iUserSelect;
+INTEGER iUserNamePinMissing;
+INTEGER iCancel;
+// LONG_INTEGER
+// SIGNED_INTEGER
+// SIGNED_LONG_INTEGER
+STRING gsText[50];
+
+
+INTEGER iQueIndex;
+STRING sbBooted[3];
+STRING sQueItem[MAX_QUE][MAX_LENGTH];
+
+/*******************************************************************************************
+  Functions
+  (Add any additional functions here)
+  Note:  Functions must be physically placed before the location in
+         the code that calls them.
+*******************************************************************************************/
+
+String_Function DateTime(integer iFormat)
+{
+	string sDateTime[20],
+				 sAMPM[2];
+	
+	integer iHour,
+					iMin,
+					iSec;
+	
+	if (iFormat = DATE_TIME_12)
+	{
+		sDateTime = date(4) + " ";
+		
+		iHour = gethournum();
+		iMin = getminutesnum();
+		iSec = getsecondsnum();
+		
+		if (iHour = 0)
+		{
+			sAMPM = "AM";
+			
+			sDateTime = sDateTime + "12:";
+		}
+		else if (iHour < 12)
+		{
+			sAMPM = "AM";
+			
+			sDateTime = sDateTime + itoa(iHour) + ":";		
+		}
+		else
+		{
+			sAMPM = "PM";
+			
+			if (iHour > 12)
+			 iHour = iHour - 12;
+			
+			sDateTime = sDateTime + itoa(iHour) + ":";		
+		}
+		
+		if (iMin < 10)
+		 sDateTime = sDateTime + "0" + itoa(iMin) + ":";
+		else
+		 sDateTime = sDateTime + itoa(iMin) + ":";
+		
+		if (iSec < 10)
+		 sDateTime = sDateTime + "0" + itoa(iSec) + " " + sAMPM;
+		else
+		 sDateTime = sDateTime + itoa(iSec) + " " + sAMPM;				
+	}
+	else
+	sDateTime = date(4) + " " + time();
+  
+	return (sDateTime);
+}
+
+
+Function AddItem(string Data)
+{
+	integer i;
+	
+	if (iQueIndex < iQueLimit)
+	{
+		iQueIndex = iQueIndex + 1;
+	}
+	
+	if (iQueIndex > 1)
+	{
+		for (i = iQueIndex to 2 Step -1)
+		{
+			sQueItem[i] = sQueItem[i - 1];
+			Log_List_Item[i] = sQueItem[i - 1];
+		}
+	}
+	
+	if (Log_Date_Time_Format_12HR)
+		sQueItem[1] = DateTime(DATE_TIME_12) + " : " + Data;
+	else
+		sQueItem[1] = DateTime(DATE_TIME_24) + " : " + Data;
+	
+	Log_List_Item[1] = sQueItem[1];
+}
+
+Function RefreshLog()
+{
+	integer i;
+	for(i = 1 to iQueLimit)
+		Log_List_Item[i] = sQueItem[i];
+}
+
+Function Refresh()
+{
+	INTEGER a;
+	if(!Setup_Is_Updating)
+	{
+		for(a = 1 to ciUserMax)
+   	 {
+		Setup_User_Number[a] = itoa(a);
+		Setup_User_Name_Text[a] = Entry[a].UserName;
+		Setup_User_PIN_Text[a] = Entry[a].PIN;
+		}
+	}
+}
+
+Function LogStoreCurrentList()
+{
+
+
+	SIGNED_INTEGER  nFileHandle;
+	STRING sBuf[150];
+	INTEGER a;
+
+	StartFileOperations();
+  	if (CheckForDisk() = 1)
+	{
+		nFileHandle = FileDelete ( "\\CF0\\UserLog.txt");
+		nFileHandle = FileOpen ( "\\CF0\\UserLog.txt", _O_CREAT | _O_WRONLY | _O_TEXT);
+	}
+	else
+	{
+		nFileHandle = FileDelete ( "\\NVRAM\\UserLog.txt");
+		nFileHandle = FileOpen ( "\\NVRAM\\UserLog.txt", _O_CREAT | _O_WRONLY | _O_TEXT);
+	}
+ 	if (nFileHandle >= 0)
+	{
+		sBuf = itoa(iQueIndex) + "\n";
+		if( FileWrite(nFileHandle, sBuf, len(sBuf) ) > 0); 
+			trace ( "Written to file: %s\n", sBuf ); 
+
+	 	for(a = 1 to MAX_QUE)
+		{
+				sBuf = sQueItem[a] + "\n";
+				if( FileWrite(nFileHandle, sBuf, len(sBuf) ) > 0); 
+					trace ( "Written to file: %s\n", sBuf ); 
+		}
+
+		 if(FileClose(nFileHandle) = 0)
+		{
+			Setup_Current_List_Stored = 1;
+			Setup_Current_List_Stored = 0;
+		
+			trace("File Closed\n");
+		}
+	}		
+	EndFileOperations();
+	trace("Write Done:\n");
+}
+
+Function LogRecoverStoredList()
+{
+
+    STRING sLog[150];
+	STRING sFileRead[10000];
+	SIGNED_INTEGER  nFileHandle;
+	STRING sFromFile[10000];
+	INTEGER a;
+
+	StartFileOperations();
+
+  	if (CheckForDisk() = 1)
+	{
+		nFileHandle = FileOpen ( "\\CF0\\UserLog.txt", _O_RDONLY | _O_TEXT);
+	}
+	else
+	{
+		nFileHandle = FileOpen ( "\\NVRAM\\UserLog.txt", _O_RDONLY | _O_TEXT);
+	}
+	trace("nFileHandle:%d\n", nFileHandle);                                                                
+	if (nFileHandle >= 0) 
+
+	{
+		while(FileRead(nFileHandle, sFromFile, 10000) > 0)
+		{
+			sFileRead = sFromFile;
+		}
+        if(FileClose(nFileHandle) <> 0)
+			trace("error closing file\n");
+	}
+	EndFileOperations();
+	trace("sFromFile:%s\n", sFileRead);
+	
+	sLog = remove("\x0D\x0A", sFileRead);
+	trace("sLog[%d]:%s\n", a, sLog);
+	iQueIndex = atoi(sLog);
+
+ 	for(a = 1 to MAX_QUE)
+	{
+		sLog = remove("\x0D\x0A", sFileRead);
+		trace("sLog[%d]:%s\n", a, sLog);
+		sQueItem[a] = left(sLog, len(sLog) - 2);
+  	}
+}
+
+
+
+
+/*******************************************************************************************
+  Event Handlers
+  (Uncomment and declare additional event handlers as needed)
+*******************************************************************************************/
+
+PUSH Log_Clear_List
+{
+	integer i;
+	
+	iQueIndex = 0;
+	
+	for (i = 1 to iQueLimit)
+	{
+		sQueItem[i] = "";
+		Log_List_Item[i] = "";
+	}
+	LogStoreCurrentList();
+}
+
+CHANGE Log_Events_Text_In
+{
+	string sTempData[MAX_LENGTH];
+	
+	if(len(Log_Events_Text_In)) // if not being cleared out
+	{
+		sTempData = Log_Events_Text_In;	
+		call AddItem(sTempData);
+		LogStoreCurrentList();
+	}	
+}
+
+PUSH Log_Refresh_List
+{
+	LogRecoverStoredList();
+	RefreshLog();
+}
+
+PUSH Setup_Select_Field
+{
+	INTEGER a;
+	if(!Setup_Is_Updating)
+	{
+		iField = getlastmodifiedarrayindex();
+		if(iField mod 2)	//  if odd (username field)
+			gsText = Entry[(iField / 2) + 1].UserName;
+		else				//  if even (PIN field)
+			gsText = Entry[iField / 2].PIN;	
+   		Setup_Text_Out = gsText;
+		for (a = 1 to ciFieldMax)
+		{
+			Setup_Field_Selected[a] = 0;
+		}
+		Setup_Field_Selected[iField] = 1;
+	}
+}
+
+RELEASE Setup_Select_Field
+{	
+	if(iField mod 2) 	// odd
+		Setup_Field_Selected_Val = iField + ((iField + 1) / 2);
+	else
+		Setup_Field_Selected_Val = iField + (iField / 2);
+}
+
+CHANGE Setup_Keyboard_Text_In
+{
+	INTEGER a;
+	INTEGER iDuplicate;
+	INTEGER iInvalidLength;
+
+	gsText = Setup_Keyboard_Text_In;
+	iDuplicate = 0;
+	iInvalidLength = 0;
+	if(iField mod 2 = 0)	// if the pin (even) field
+	{
+		for(a = 2 to ciFieldMax step 2)	// any duplicates that aren't blanks?
+		{
+			if(gsText = Entry[a / 2].PIN && len(gsText) && len(Entry[a / 2].PIN))
+			{
+				iDuplicate = 1;
+				break;
+			}
+		}
+		if(len(gsText) > 8 || (len(gsText) < 4 && len(gsText) > 0))	// NOT between 4 and 8 characters?
+		{
+			iInvalidLength = 1;
+		}
+		if(!Setup_Is_Updating && !iDuplicate && !iInvalidLength)
+		{
+			Entry[iField / 2].PIN = gsText;
+		}
+		if(iDuplicate)
+		{
+			Setup_Duplicate_PIN = 1;
+			Setup_Duplicate_PIN = 0;
+		}
+
+		if(iInvalidLength)
+		{
+			Setup_Invalid_PIN_Length = 1;
+			Setup_Invalid_PIN_Length = 0;
+		}
+	}
+	else		// if the username (odd) field
+	{
+		if(!Setup_Is_Updating)
+		{
+			Entry[(iField / 2) + 1].UserName = gsText;
+		}
+	}
+ 	Refresh();
+}
+
+THREADSAFE PUSH Setup_Update_Locks
+{
+	INTEGER a;
+	INTEGER b;
+	INTEGER c;
+	INTEGER iDuplicate;
+	INTEGER iInvalidLength;
+
+	iDuplicate = 0;
+	iInvalidLength = 0;
+	for(a = 2 to ciFieldMax step 2)
+	{
+		b = a + 2;
+		for(c = b to ciFieldMax step 2)
+		{
+			if(Entry[a / 2].PIN = Entry[c / 2].PIN && len(Entry[a / 2].PIN) && len(Entry[c / 2].PIN))
+			{
+				iDuplicate = 1;
+				break;
+			}
+		}
+		if(len(Entry[a / 2].PIN) > 8 || (len(Entry[a / 2].PIN) < 4 && len(Entry[a / 2].PIN) > 0))
+		{
+			iInvalidLength = 1;
+			break;
+		}	
+		if(iDuplicate)
+		{
+			Setup_Duplicate_PIN = 1;
+			Setup_Duplicate_PIN = 0;
+		}
+
+		if(iInvalidLength)
+		{
+			Setup_Invalid_PIN_Length = 1;
+			Setup_Invalid_PIN_Length = 0;
+		}
+	}
+	if(!iDuplicate && !iInvalidLength)
+	{
+		iUserNamePinMissing = 0;
+		iField = 0;
+		Setup_Field_Selected_Val = iField;
+		iCancel = 0;
+		Setup_Text_Out = "";
+		for (a = 1 to ciFieldMax)
+		{
+			Setup_Field_Selected[a] = 0;
+		}
+   	
+		for(a = 1 to ciUserMax)
+	   	 {
+			if((len(Entry[a].PIN) = 0 && len(Entry[a].UserName)) || (len(Entry[a].PIN) && len(Entry[a].UserName) = 0))
+			{	
+				iUserNamePinMissing = 1;
+				break;
+			}
+		}
+		if(iUserNamePinMissing = 1)
+		{
+			Setup_User_Name_Or_PIN_Missing = 1;
+			Setup_User_Name_Or_PIN_Missing = 0;
+		}
+		else
+		{ 
+			Setup_Is_Updating = 1;
+			for(a = 1 to ciUserMax)
+    		{
+				if(iCancel = 1)
+				{
+					Setup_Is_Updating = 0;
+					Setup_Update_Cancelled = 1;
+					Setup_Update_Cancelled = 0;
+					break;
+				}
+				Setup_Updating_Progress_Gauge = (a * 65535 ) / (ciUserMax * 2);
+				To_Lock_User_Number = itoa(a);	
+				
+				To_Lock_User_Delete = 1;
+				To_Lock_User_Delete = 0;
+				delay(500);
+			}
+			for(a = 1 to ciUserMax)
+			{
+				if(iCancel = 1)
+				{
+					Setup_Is_Updating = 0;
+					Setup_Update_Cancelled = 1;
+					Setup_Update_Cancelled = 0;
+					break;
+				}
+				Setup_Updating_Progress_Gauge = ((a + ciUserMax) * 65535) / (ciUserMax * 2);
+				if(len(Entry[a].PIN))
+				{
+					To_Lock_User_Number = itoa(a);
+					To_Lock_User_PIN = Entry[a].PIN;
+					To_Lock_User_Name = Entry[a].UserName;
+					To_Lock_Set_User_PIN = 1;
+					To_Lock_Set_User_PIN = 0;
+					delay(460);
+				}
+				delay(40);
+			}
+		}
+		if(!iCancel && !iUserNamePinMissing)
+		{
+			Setup_Updating_Complete = 1;
+			Setup_Updating_Complete = 0;
+		}
+		Setup_Is_Updating = 0;
+		Setup_Updating_Progress_Gauge = 0;
+		iCancel = 0;
+	}
+}
+
+PUSH Setup_Cancel_Update
+{
+	if(Setup_Is_Updating)
+		iCancel = 1;
+}
+
+PUSH Setup_Refresh_List
+{
+	Refresh();
+}
+	
+THREADSAFE PUSH Setup_Recover_Stored_List
+{
+
+    STRING sName[50];
+	STRING sPIN[10];
+	STRING sFileRead[1000];
+	SIGNED_INTEGER  nFileHandle;
+	STRING sFromFile[1000];
+	INTEGER a;
+
+	StartFileOperations();
+
+  	if (CheckForDisk() = 1)
+	{
+		nFileHandle = FileOpen ( "\\CF0\\UserInfo.txt", _O_RDONLY | _O_TEXT);
+	}
+	else
+	{
+		nFileHandle = FileOpen ( "\\NVRAM\\UserInfo.txt", _O_RDONLY | _O_TEXT);
+	}
+	trace("nFileHandle:%d\n", nFileHandle);                                                                
+	if (nFileHandle >= 0) 
+
+	{
+		while(FileRead(nFileHandle, sFromFile, 1000) > 0)
+		{
+			sFileRead = sFromFile;
+		}
+        if(FileClose(nFileHandle) <> 0)
+			trace("error closing file\n");
+	}
+	EndFileOperations();
+	trace("sFromFile:%s\n", sFileRead);
+	
+ 	for(a = 1 to ciUserMax)
+	{
+		sName = remove("\x0D\x0A", sFileRead);
+		sPIN = remove("\x0D\x0A", sFileRead); 
+		trace("sNAME[%d]:%s\n", a, sName);
+		trace("sPIN[%d]:%s\n", a, sPIN);
+		Entry[a].UserName = left(sName, len(sName) - 2);
+		Entry[a].PIN = left(sPIN, len(sPIN) - 2);
+  
+	}
+	Refresh();
+	
+}
+
+
+THREADSAFE PUSH Setup_Store_Current_List
+{
+
+
+	SIGNED_INTEGER  nFileHandle;
+	STRING sBuf[100];
+	INTEGER a;
+
+	StartFileOperations();
+  	if (CheckForDisk() = 1)
+	{
+		nFileHandle = FileDelete ( "\\CF0\\UserInfo.txt");
+		nFileHandle = FileOpen ( "\\CF0\\UserInfo.txt", _O_CREAT | _O_WRONLY | _O_TEXT);
+	}
+	else
+	{
+		nFileHandle = FileDelete ( "\\NVRAM\\UserInfo.txt");
+		nFileHandle = FileOpen ( "\\NVRAM\\UserInfo.txt", _O_CREAT | _O_WRONLY | _O_TEXT);
+	}
+ 	if (nFileHandle >= 0)
+	{
+	 	for(a = 1 to ciUserMax)
+		{
+				sBuf = Entry[a].UserName + "\n";
+				if( FileWrite(nFileHandle, sBuf, len(sBuf) ) > 0); 
+					trace ( "Written to file: %s\n", sBuf ); 
+				sBuf = Entry[a].PIN + "\n";
+				if( FileWrite(nFileHandle, sBuf, len(sBuf) ) > 0); 
+			 		trace ( "Written to file: %s\n", sBuf ); 
+		}
+
+		 if(FileClose(nFileHandle) = 0)
+		{
+			Setup_Current_List_Stored = 1;
+			Setup_Current_List_Stored = 0;
+		
+			trace("File Closed\n");
+		}
+	}		
+	EndFileOperations();
+	trace("Write Done:\n");
+}
+
+
+/*******************************************************************************************
+  Main()
+  Uncomment and place one-time startup code here
+  (This code will get called when the system starts up)
+*******************************************************************************************/
+
+Function Main()
+{
+	integer i;
+	integer a;	
+	waitForInitializationComplete();
+
+	if(Log_Output_List_Size < MAX_QUE)
+		iQueLimit = Log_Output_List_Size;
+	else
+		iQueLimit = MAX_QUE;
+	 
+	if(sbBooted <> "YES")
+	{
+		iQueIndex = 0;
+		
+		for (i = 1 to MAX_QUE)
+		{
+			sQueItem[i] = "";
+		}
+		
+		sbBooted = "YES";
+	}
+	
+	wait(100)
+	{
+		LogRecoverStoredList();
+		RefreshLog();
+	}
+	Setup_Is_Updating = 0;
+	iCancel = 0;
+}
+
+

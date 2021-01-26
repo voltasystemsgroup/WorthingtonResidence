@@ -1,0 +1,81 @@
+[BEGIN]
+  Version=1
+[END]
+[BEGIN]
+  ObjTp=FSgntr
+  Sgntr=UserSPlus
+  RelVrs=1
+  IntStrVrs=1
+  SPlusVrs=4.04.01
+  CrossCplrVrs=1.3
+[END]
+[BEGIN]
+  ObjTp=Hd
+  Cmn1=***Use of this module on a standalone basis is unsuppored by ControlWorks***\\
+  Cmn2=Copyright (C) 2006-2015 ControlWorks Consulting, LLC All Rights||1
+  Cmn3=Reserved – Use Subject to License.\\US Government Restricted Rights.
+  Cmn4=||1Use, duplication or disclosure by the Government is subject to||1
+  Cmn5=restrictions set forth in subparagraphs (a)-(d) of FAR 52.227-19.
+  Cmn6=\\This will translate selected characters from UTF-8 range U+2000-
+  Cmn7=U+206F (General Punctuation)\\and U+0080-U+00FF (Latin-1 Suppliment).
+  Cmn8=||1All other UTF-8 characters will be replaced with <space>
+[END]
+[BEGIN]
+  ObjTp=Symbol
+  Exclusions=1,19,20,21,88,89,167,168,179,213,214,215,216,217,225,226,248,249,266,267,310,718,756,854,
+  Exclusions_CDS=5
+  Inclusions_CDS=6
+  Name=UTF-8_Processor_(ControlWorks)_v1.1
+  SmplCName=utf-8_processor_(ControlWorks)_v1.1.usp
+  Code=1
+  SysRev5=4.006
+  SMWRev=3.00.00
+  InputList2Cue1=in$[#]
+  InputList2SigType1=Serial
+  OutputList2Cue1=out$[#]
+  OutputList2SigType1=Serial
+  ParamCue1=[Reference Name]
+  MinVariableInputs=0
+  MaxVariableInputs=0
+  MinVariableInputsList2=1
+  MaxVariableInputsList2=20
+  MinVariableOutputs=0
+  MaxVariableOutputs=0
+  MinVariableOutputsList2=1
+  MaxVariableOutputsList2=20
+  MinVariableParams=0
+  MaxVariableParams=0
+  Expand=expand_separately
+  Expand2=expand_separately
+  ProgramTree=Logic
+  SymbolTree=10
+  Hint=Removes and Translates UTF-8 characters where possible
+  PdfHelp=
+  HelpID= 
+  Render=4
+  Smpl-C=16
+  CompilerCode=-48
+  CompilerParamCode=27
+  CompilerParamCode5=14
+  NumFixedParams=1
+  Pp1=1
+  MPp=1
+  NVStorage=10
+  ParamSigType1=String
+  SmplCInputCue1=o#
+  SmplCOutputCue1=i#
+  SmplCInputList2Cue1=an#
+  SmplCOutputList2Cue1=ai#
+  SPlus2CompiledName=S2_utf_8_processor__ControlWorks__v1_1
+  SymJam=NonExclusive
+  FileName=utf-8_processor_(ControlWorks)_v1.1.ush
+  SIMPLPlusModuleEncoding=0
+  Usl1=_AS_ Constants.usl
+  clz1=AdaptCore
+[END]
+[BEGIN]
+  ObjTp=Dp
+  H=1
+  Tp=1
+  NoS=False
+[END]
